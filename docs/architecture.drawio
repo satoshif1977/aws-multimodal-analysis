@@ -1,0 +1,94 @@
+<mxfile host="Electron" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/29.5.2 Chrome/142.0.7444.265 Electron/39.6.1 Safari/537.36" version="29.5.2">
+  <diagram name="業務文書解析アーキテクチャ" id="0">
+    <mxGraphModel dx="1188" dy="899" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="94" edge="1" parent="1" source="60" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#C7131F;strokeWidth=2;endArrow=block;endFill=1;labelBackgroundColor=#ffffff;" target="80" value="PutItem">
+          <mxGeometry relative="1" x="-0.0296" y="-1" as="geometry">
+            <mxPoint y="-1" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="95" edge="1" parent="1" source="40" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#E7157B;dashed=1;strokeWidth=1.6;endArrow=block;endFill=1;labelBackgroundColor=#ffffff;" target="70" value="ログ">
+          <mxGeometry relative="1" x="0.0225" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="90" edge="1" parent="1" source="20" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#6c8ebf;strokeWidth=2;endArrow=block;endFill=1;labelBackgroundColor=#ffffff;" target="30" value="ファイルアップロード（aws s3 cp）">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="91" edge="1" parent="1" source="30" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#ED7515;strokeWidth=2;endArrow=block;endFill=1;labelBackgroundColor=#ffffff;" target="40" value="ObjectCreated イベント">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="92" edge="1" parent="1" source="40" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#01A88D;strokeWidth=2;endArrow=block;endFill=1;labelBackgroundColor=#ffffff;" target="50" value="Base64画像 + プロンプト">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="93" edge="1" parent="1" source="50" style="edgeStyle=orthogonalEdgeStyle;html=1;strokeColor=#01A88D;strokeWidth=2;endArrow=block;endFill=1;labelBackgroundColor=#ffffff;" target="60" value="解析結果 JSON">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint y="-12" as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="10" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=22;fontStyle=1;" value="業務文書自動解析パイプライン（Multimodal Analysis PoC）" vertex="1">
+          <mxGeometry height="40" width="800" x="270" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="20" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=13;fontStyle=1;" value="👤 担当者" vertex="1">
+          <mxGeometry height="60" width="90" x="135" y="120" as="geometry" />
+        </mxCell>
+        <mxCell id="30" parent="1" style="outlineConnect=0;fontColor=#232F3E;gradientColor=none;strokeColor=none;fillColor=#3F8624;labelBackgroundColor=#ffffff;align=center;html=1;fontSize=13;fontStyle=1;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.s3;" value="Amazon S3" vertex="1">
+          <mxGeometry height="72" width="72" x="145" y="275" as="geometry" />
+        </mxCell>
+        <mxCell id="31" parent="1" style="text;html=1;align=center;fontSize=11;strokeColor=none;fillColor=none;" value="S3 バケット（暗号化・バージョニング）" vertex="1">
+          <mxGeometry height="24" width="170" x="95" y="352" as="geometry" />
+        </mxCell>
+        <mxCell id="32" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#666666;fontSize=11;" value="📄 請求書 / 見積書&#xa;📄 申込書 / 報告書" vertex="1">
+          <mxGeometry height="56" width="120" x="121" y="386" as="geometry" />
+        </mxCell>
+        <mxCell id="40" parent="1" style="outlineConnect=0;fontColor=#232F3E;gradientColor=none;strokeColor=none;fillColor=#ED7515;labelBackgroundColor=#ffffff;align=center;html=1;fontSize=13;fontStyle=1;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.lambda;" value="AWS Lambda" vertex="1">
+          <mxGeometry height="72" width="72" x="436" y="275" as="geometry" />
+        </mxCell>
+        <mxCell id="41" parent="1" style="text;html=1;align=center;fontSize=11;strokeColor=none;fillColor=none;" value="解析 Lambda（Python 3.11）" vertex="1">
+          <mxGeometry height="24" width="170" x="381" y="352" as="geometry" />
+        </mxCell>
+        <mxCell id="50" parent="1" style="outlineConnect=0;fontColor=#232F3E;gradientColor=none;strokeColor=none;fillColor=#01A88D;labelBackgroundColor=#ffffff;align=center;html=1;fontSize=13;fontStyle=1;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.bedrock;" value="Amazon Bedrock" vertex="1">
+          <mxGeometry height="72" width="72" x="714" y="275" as="geometry" />
+        </mxCell>
+        <mxCell id="51" parent="1" style="text;html=1;align=center;fontSize=11;strokeColor=none;fillColor=none;" value="Claude 3.5 Sonnet（マルチモーダル）" vertex="1">
+          <mxGeometry height="24" width="190" x="649" y="352" as="geometry" />
+        </mxCell>
+        <mxCell id="60" parent="1" style="outlineConnect=0;fontColor=#232F3E;gradientColor=none;strokeColor=none;fillColor=#C7131F;labelBackgroundColor=#ffffff;align=center;html=1;fontSize=13;fontStyle=1;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.dynamodb;" value="Amazon DynamoDB" vertex="1">
+          <mxGeometry height="72" width="72" x="1000" y="275" as="geometry" />
+        </mxCell>
+        <mxCell id="61" parent="1" style="text;html=1;align=center;fontSize=11;strokeColor=none;fillColor=none;" value="解析結果保存（TTL: 90日）" vertex="1">
+          <mxGeometry height="24" width="160" x="955" y="352" as="geometry" />
+        </mxCell>
+        <mxCell id="lwx3gJTy2dNsuS3NXfHg-95" connectable="0" parent="1" style="group" value="" vertex="1">
+          <mxGeometry height="108" width="180" x="945" y="455" as="geometry" />
+        </mxCell>
+        <mxCell id="80" parent="lwx3gJTy2dNsuS3NXfHg-95" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=10;align=left;fontFamily=Courier New;" value="{&quot;document_type&quot;:&quot;請求書&quot;&#xa;&quot;vendor_name&quot;:&quot;〇〇株式会社&quot;&#xa;&quot;total_amount&quot;:110000&#xa;&quot;issue_date&quot;:&quot;2026-03-11&quot;}" vertex="1">
+          <mxGeometry height="87.09677419354838" width="180" y="20.903225806451612" as="geometry" />
+        </mxCell>
+        <mxCell id="81" parent="lwx3gJTy2dNsuS3NXfHg-95" style="text;html=1;align=center;fontSize=12;fontStyle=1;strokeColor=none;fillColor=none;" value="抽出結果 JSON" vertex="1">
+          <mxGeometry height="20.903225806451612" width="170" x="5" as="geometry" />
+        </mxCell>
+        <mxCell id="lwx3gJTy2dNsuS3NXfHg-97" connectable="0" parent="1" style="group" value="" vertex="1">
+          <mxGeometry height="84" width="112" x="420" y="477" as="geometry" />
+        </mxCell>
+        <mxCell id="70" parent="lwx3gJTy2dNsuS3NXfHg-97" style="outlineConnect=0;fontColor=#232F3E;gradientColor=none;strokeColor=none;fillColor=#E7157B;labelBackgroundColor=#ffffff;align=center;html=1;fontSize=12;aspect=fixed;shape=mxgraph.aws4.cloudwatch;" value="CloudWatch&#xa;Logs" vertex="1">
+          <mxGeometry height="60" width="60" x="21" as="geometry" />
+        </mxCell>
+        <mxCell id="71" parent="lwx3gJTy2dNsuS3NXfHg-97" style="text;html=1;align=center;fontSize=11;strokeColor=none;fillColor=none;" value="処理ログ（3日間）" vertex="1">
+          <mxGeometry height="24" width="112" y="60" as="geometry" />
+        </mxCell>
+        <mxCell id="42" parent="1" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fff2cc;strokeColor=#d6b656;fontSize=11;align=left;" value="&lt;div style=&quot;text-align: center;&quot;&gt;&lt;b&gt;&lt;font&gt;Lambda&lt;/font&gt;&lt;/b&gt;&lt;/div&gt;&amp;nbsp; ① ファイル検証&lt;br&gt;&amp;nbsp; ② S3 からDL&lt;br&gt;&amp;nbsp; ③ Bedrock 解析&lt;br&gt;&amp;nbsp; ④ DynamoDB 保存" vertex="1">
+          <mxGeometry height="88" width="115" x="414.5" y="170" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
