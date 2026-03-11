@@ -1,0 +1,14 @@
+project_name = "multimodal"
+environment  = "dev"
+aws_region   = "ap-northeast-1"
+
+# S3 バケット名をユニークにするサフィックス（AWS アカウント ID など）
+s3_bucket_suffix = "123456789012"
+
+# Bedrock モデル（高精度解析には Sonnet 推奨）
+bedrock_model_id = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+
+# Lambda 設定
+lambda_timeout     = 60
+lambda_memory_size = 512
+log_retention_days = 3
