@@ -3,6 +3,16 @@
 画像・PDF などの業務文書を S3 にアップロードするだけで自動解析し、
 構造化データとして DynamoDB に保存する PoC です。
 
+## 動作画面
+
+| Streamlit Web UI（解析結果一覧） | DynamoDB（解析結果保存） |
+|---|---|
+| ![Streamlit UI](docs/screenshots/08_streamlit_ui_results.png) | ![DynamoDB](docs/screenshots/02_dynamodb_scan_result.png) |
+
+| S3（アップロード済みファイル） | CloudWatch Logs（Lambda 実行ログ） |
+|---|---|
+| ![S3](docs/screenshots/01_s3_uploads_folder.png) | ![CloudWatch](docs/screenshots/05_cloudwatch_logs_success.png) |
+
 ---
 
 ## 想定する社内業務
