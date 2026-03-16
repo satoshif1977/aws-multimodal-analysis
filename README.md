@@ -39,7 +39,7 @@ graph LR
     A[ユーザー] -->|ファイルアップロード| B[S3 バケット]
     B -->|ObjectCreated イベント| C[Lambda]
     C -->|ファイル取得| B
-    C -->|マルチモーダル解析| D[Amazon Bedrock\nClaude 3.5 Sonnet]
+    C -->|マルチモーダル解析| D[Amazon Bedrock\nClaude 3 Haiku]
     D -->|解析結果 JSON| C
     C -->|構造化データ保存| E[DynamoDB]
     C -->|ログ出力| F[CloudWatch Logs]
@@ -84,7 +84,9 @@ Lambda が起動
 
 ### 1. Bedrock モデルのアクセス許可
 
-AWS コンソール → Amazon Bedrock → モデルアクセス → **Claude 3.5 Sonnet を有効化**
+AWS コンソール → Amazon Bedrock → モデルアクセス → **Claude 3 Haiku を有効化**
+
+> **Note:** Claude 3.5 Sonnet v2 はオンデマンド直接呼び出し非対応（inference profile が必要）のため、本 PoC では Claude 3 Haiku を使用しています。
 
 ### 2. Terraform でデプロイ
 
@@ -129,7 +131,7 @@ aws dynamodb scan --table-name multimodal-dev-results
 | リソース | 単価 | 月間想定 | 小計 |
 |---------|------|---------|------|
 | Lambda | $0.0000002/リクエスト | 500回 | ~$0.01 |
-| Bedrock Claude 3.5 Sonnet | $3/1M input tokens | 500回×1000tokens | ~$1.50 |
+| Bedrock Claude 3 Haiku | $0.25/1M input tokens | 500回×1000tokens | ~$0.13 |
 | S3 | $0.025/GB | 1GB | ~$0.03 |
 | DynamoDB | PAY_PER_REQUEST | 500件 | ~$0.01 |
 | **合計** | | | **~$1.55/月** |

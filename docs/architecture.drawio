@@ -58,7 +58,7 @@
         <mxCell id="50" parent="1" style="outlineConnect=0;fontColor=#232F3E;gradientColor=none;strokeColor=none;fillColor=#01A88D;labelBackgroundColor=#ffffff;align=center;html=1;fontSize=13;fontStyle=1;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.bedrock;" value="Amazon Bedrock" vertex="1">
           <mxGeometry height="72" width="72" x="714" y="275" as="geometry" />
         </mxCell>
-        <mxCell id="51" parent="1" style="text;html=1;align=center;fontSize=11;strokeColor=none;fillColor=none;" value="Claude 3.5 Sonnet（マルチモーダル）" vertex="1">
+        <mxCell id="51" parent="1" style="text;html=1;align=center;fontSize=11;strokeColor=none;fillColor=none;" value="Claude 3 Haiku（マルチモーダル）" vertex="1">
           <mxGeometry height="24" width="190" x="649" y="352" as="geometry" />
         </mxCell>
         <mxCell id="60" parent="1" style="outlineConnect=0;fontColor=#232F3E;gradientColor=none;strokeColor=none;fillColor=#3F8624;labelBackgroundColor=#ffffff;align=center;html=1;fontSize=13;fontStyle=1;aspect=fixed;shape=mxgraph.aws4.resourceIcon;resIcon=mxgraph.aws4.dynamodb;" value="Amazon DynamoDB" vertex="1">
