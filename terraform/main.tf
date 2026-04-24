@@ -56,8 +56,8 @@ resource "aws_s3_bucket_versioning" "docs" {
 resource "aws_dynamodb_table" "results" {
   name         = "${local.name_prefix}-results"
   billing_mode = var.dynamodb_billing_mode
-  hash_key     = "document_id"   # S3 オブジェクトキー
-  range_key    = "analyzed_at"   # 解析日時（ISO 8601）
+  hash_key     = "document_id" # S3 オブジェクトキー
+  range_key    = "analyzed_at" # 解析日時（ISO 8601）
 
   attribute {
     name = "document_id"
