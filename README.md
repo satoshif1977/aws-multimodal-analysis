@@ -1,5 +1,13 @@
 # aws-multimodal-analysis
 
+![CI](https://github.com/satoshif1977/aws-multimodal-analysis/actions/workflows/ci.yml/badge.svg)
+![AWS](https://img.shields.io/badge/AWS-232F3E?style=flat&logo=amazon-aws&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
+![Terraform](https://img.shields.io/badge/Terraform-623CE4?style=flat&logo=terraform&logoColor=white)
+![Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-orange?logo=anthropic)
+![Claude Cowork](https://img.shields.io/badge/Daily%20Use-Claude%20Cowork-blueviolet?logo=anthropic)
+![Claude Skills](https://img.shields.io/badge/Custom-Skills%20Configured-green?logo=anthropic)
+
 画像・PDF などの業務文書を S3 にアップロードするだけで自動解析し、
 構造化データとして DynamoDB に保存する PoC です。
 
@@ -165,3 +173,79 @@ terraform destroy
 ---
 
 *このプロジェクトは学習・PoC 目的で作成しました。本番導入時は抽出精度の検証・エラー通知・監査ログの追加が必要です。*
+
+---
+
+## CI / セキュリティスキャン
+
+GitHub Actions で Python ユニットテスト・Terraform 静的解析（Checkov）を自動実行しています。
+
+### 実施内容
+
+| ジョブ | 内容 |
+|---|---|
+| terraform fmt / validate | フォーマット・構文チェック |
+| Python ユニットテスト | pytest で Lambda 関数のロジックを検証 |
+| Checkov セキュリティスキャン | IaC のセキュリティポリシー違反を検出（soft_fail: false） |
+
+### セキュリティ対応（Terraform で修正した内容）
+
+| リソース | 追加設定 |
+|---|---|
+| S3 | SSE-AES256 暗号化・パブリックアクセスブロック（4項目）・バージョニング |
+| Lambda | `tracing_config { mode = "PassThrough" }`（X-Ray 有効化） |
+| DynamoDB | PITR（Point-in-Time Recovery）・`deletion_protection_enabled = true` |
+| IAM（Bedrock ポリシー） | 特定モデル ARN に限定（ワイルドカード使用なし） |
+
+### 意図的にスキップしている項目（PoC の合理的な省略）
+
+| チェック ID | 内容 | 理由 |
+|---|---|---|
+| CKV_AWS_117 | Lambda VPC 内配置 | PoC では不要 |
+| CKV_AWS_116 | Lambda DLQ 設定 | PoC では不要 |
+| CKV_AWS_115 | Lambda 予約済み同時実行 | PoC では不要 |
+| CKV_AWS_158 | CloudWatch Logs KMS | AWS 管理キーで十分 |
+| CKV_AWS_338 | CloudWatch Logs 保持期間 | dev は 30 日で十分 |
+| CKV_AWS_145 | S3 KMS 暗号化 | AES256 で十分 |
+| CKV_AWS_18 / CKV_AWS_144 | S3 アクセスログ・レプリケーション | PoC では不要 |
+
+---
+
+## 学習で気づいたこと・躓いたポイント
+
+### Bedrock / Lambda
+
+- **Bedrock のマルチモーダル API はファイルサイズに注意**: 大きな PDF をそのままバイナリで渡すと `ValidationException` になる。Claude 3 Haiku は画像・PDF を base64 エンコードして渡す仕様のため、ファイルサイズ上限（5MB / ページ数）を事前に確認する。
+- **ファイル種別の判定はファイル名より MIME タイプが確実**: 拡張子が `.pdf` でも中身が壊れている場合がある。Lambda 内で拡張子ベースで判定しつつ、Bedrock へのリクエスト前にファイルの先頭バイトで MIME タイプを検証するとより堅牢。
+- **Bedrock のレスポンス解析は `content[0]["text"]` を参照**: `invoke_model()` のレスポンスは `response["body"].read()` で読み取り、`json.loads()` 後に `result["content"][0]["text"]` を取得する。階層が深いため最初は混乱しやすい。
+
+### Terraform / S3
+
+- **S3 バージョニング有効バケットの `terraform destroy` が失敗**: バージョニングを有効にすると削除マーカーが残り destroy が途中で失敗する。バージョン一覧を取得して手動削除してから `destroy` する手順が必要（`aws s3api list-object-versions` → 個別削除）。
+- **Lambda の ZIP アップロード**: `archive_file` データソースで自動 ZIP 化する方法が便利。ただし Lambda コードのパスが変わると再 ZIP が走るため、apply のたびにデプロイが発生することがある（`source_code_hash` で制御可能）。
+
+### DynamoDB 設計
+
+- **PAY_PER_REQUEST と Provisioned の使い分け**: PoC では `PAY_PER_REQUEST` で始めるのが正解（リクエスト数が読めない段階で Provisioned にするとコスト予測ができない）。本番でリクエスト数が安定したら Provisioned に切り替えてコストを最適化する。
+
+---
+
+## AI 活用について
+
+本プロジェクトは以下の Anthropic ツールを活用して開発しています。
+
+| ツール | 用途 |
+|---|---|
+| **Claude Code** | インフラ設計・コード生成・デバッグ・コードレビュー。コミットまで一貫してサポート |
+| **Claude Cowork** | 技術調査・設計相談・ドキュメント作成を日常的に活用。AI との協働を業務フローに組み込んでいる |
+| **カスタム Skills** | Terraform / Python / AWS に特化した Skills を設定・継続的に更新。自分の技術スタックに最適化したワークフローを構築 |
+
+> AI を「使う」だけでなく、自分の業務・技術スタックに合わせて**設定・運用・改善し続ける**ことを意識しています。
+
+---
+
+## 関連リポジトリ
+
+- [aws-cdk-multimodal](https://github.com/satoshif1977/aws-cdk-multimodal) - 同じマルチモーダル分析を AWS CDK（TypeScript）で実装
+- [aws-bedrock-agent](https://github.com/satoshif1977/aws-bedrock-agent) - Bedrock Agent + Lambda FAQ ボット
+- [aws-rag-knowledgebase](https://github.com/satoshif1977/aws-rag-knowledgebase) - S3 + API Gateway + Lambda + Bedrock RAG PoC
