@@ -23,7 +23,7 @@ variable "bedrock_model_id" {
   default     = "anthropic.claude-3-5-sonnet-20241022-v2:0"
   # 候補（マルチモーダル対応モデル）:
   #   anthropic.claude-3-5-sonnet-20241022-v2:0  （高精度・推奨）
-  #   anthropic.claude-3-haiku-20240307-v1:0     （低コスト・簡易解析向け）
+  #   anthropic.claude-3-5-haiku-20241022-v1:0     （低コスト・簡易解析向け）
   # TODO: 本番では解析精度とコストのバランスで選定する
 }
 
