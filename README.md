@@ -176,6 +176,49 @@ terraform destroy
 
 ---
 
+## トラブルシューティング
+
+| 症状 | 原因 | 対処法 |
+|---|---|---|
+| Bedrock で `ValidationException` | ファイルサイズが大きすぎる（5MB 超） | ファイルを圧縮・リサイズしてから再アップロード |
+| `terraform destroy` が失敗 | S3 バージョニング有効バケットに削除マーカーが残存 | `aws s3 rm s3://<バケット名> --recursive` で空にしてから `destroy` |
+| Lambda が起動しない | S3 バケット通知設定がない | `terraform apply` で `aws_s3_bucket_notification` が作成されているか確認 |
+| DynamoDB の `status` が `error` | Bedrock からの JSON パースに失敗 | CloudWatch Logs `/aws/lambda/multimodal-dev` でエラーログを確認 |
+
+---
+
+## ローカル開発・テスト方法
+
+### S3 アップロードと Lambda ログの確認
+
+```bash
+# S3 にファイルをアップロード
+aws-vault exec personal-dev-source -- aws s3 cp invoice.pdf \
+  s3://<バケット名>/uploads/invoice.pdf
+
+# Lambda のログをリアルタイムで確認
+aws-vault exec personal-dev-source -- aws logs tail \
+  /aws/lambda/multimodal-dev --follow
+```
+
+### DynamoDB の結果確認
+
+```bash
+aws-vault exec personal-dev-source -- aws dynamodb scan \
+  --table-name multimodal-dev-results \
+  --projection-expression "fileKey, #s, uploadedAt" \
+  --expression-attribute-names '{"#s": "status"}'
+```
+
+### Python ユニットテスト（ローカル）
+
+```bash
+pip install pytest boto3
+pytest tests/ -v
+```
+
+---
+
 ## CI / セキュリティスキャン
 
 GitHub Actions で Python ユニットテスト・Terraform 静的解析（Checkov）を自動実行しています。
