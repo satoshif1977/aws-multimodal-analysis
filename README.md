@@ -292,3 +292,7 @@ GitHub Actions で Python ユニットテスト・Terraform 静的解析（Check
 - [aws-cdk-multimodal](https://github.com/satoshif1977/aws-cdk-multimodal) - 同じマルチモーダル分析を AWS CDK（TypeScript）で実装
 - [aws-bedrock-agent](https://github.com/satoshif1977/aws-bedrock-agent) - Bedrock Agent + Lambda FAQ ボット
 - [aws-rag-knowledgebase](https://github.com/satoshif1977/aws-rag-knowledgebase) - S3 + API Gateway + Lambda + Bedrock RAG PoC
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting and security policies.

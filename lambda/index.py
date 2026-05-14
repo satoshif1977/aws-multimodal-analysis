@@ -22,6 +22,7 @@ import logging
 import os
 import uuid
 from datetime import datetime, timezone, timedelta
+from typing import Any, Dict, List, Tuple
 
 import boto3
 from botocore.exceptions import ClientError
@@ -50,7 +51,7 @@ dynamodb = boto3.resource("dynamodb")
 
 
 # ── ファイル検証 ───────────────────────────────────────────
-def validate_file(key: str, size_bytes: int) -> tuple[bool, str]:
+def validate_file(key: str, size_bytes: int) -> Tuple[bool, str]:
     """
     ファイルの拡張子とサイズを検証する。
     戻り値: (OK かどうか, エラーメッセージ)
@@ -128,7 +129,7 @@ def build_prompt(key: str) -> str:
 
 
 # ── Bedrock でファイル解析 ─────────────────────────────────
-def analyze_with_bedrock(file_bytes: bytes, key: str) -> dict:
+def analyze_with_bedrock(file_bytes: bytes, key: str) -> Dict[str, Any]:
     """
     Bedrock（Claude マルチモーダル）でファイルを解析して結果を返す。
 
@@ -195,7 +196,7 @@ def analyze_with_bedrock(file_bytes: bytes, key: str) -> dict:
 
 
 # ── DynamoDB に保存（サンプル実装） ───────────────────────
-def save_to_dynamodb(document_id: str, bucket: str, key: str, result: dict) -> None:
+def save_to_dynamodb(document_id: str, bucket: str, key: str, result: Dict[str, Any]) -> None:
     """
     解析結果を DynamoDB に保存する。
 
@@ -229,7 +230,7 @@ def save_to_dynamodb(document_id: str, bucket: str, key: str, result: dict) -> N
 
 
 # ── Lambda ハンドラー ──────────────────────────────────────
-def handler(event: dict, context) -> dict:
+def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     S3 イベントを受け取り、ファイルを解析して DynamoDB に保存する。
 
