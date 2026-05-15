@@ -13,6 +13,8 @@
 
 ## 動作画面
 
+![demo](docs/demo/demo.gif)
+
 | Streamlit Web UI（解析結果一覧） | DynamoDB（解析結果保存） |
 |---|---|
 | ![Streamlit UI](docs/screenshots/08_streamlit_ui_results.png) | ![DynamoDB](docs/screenshots/02_dynamodb_scan_result.png) |
