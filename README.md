@@ -49,7 +49,7 @@ graph LR
     A[ユーザー] -->|ファイルアップロード| B[S3 バケット]
     B -->|ObjectCreated イベント| C[Lambda]
     C -->|ファイル取得| B
-    C -->|マルチモーダル解析| D[Amazon Bedrock\nClaude 3 Haiku]
+    C -->|マルチモーダル解析| D[Amazon Bedrock\nClaude 3.5 Haiku]
     D -->|解析結果 JSON| C
     C -->|構造化データ保存| E[DynamoDB]
     C -->|ログ出力| F[CloudWatch Logs]
@@ -94,9 +94,9 @@ Lambda が起動
 
 ### 1. Bedrock モデルのアクセス許可
 
-AWS コンソール → Amazon Bedrock → モデルアクセス → **Claude 3 Haiku を有効化**
+AWS コンソール → Amazon Bedrock → モデルアクセス → **Claude 3.5 Haiku を有効化**
 
-> **Note:** Claude 3.5 Sonnet v2 はオンデマンド直接呼び出し非対応（inference profile が必要）のため、本 PoC では Claude 3 Haiku を使用しています。
+> **Note:** Claude 3.5 Sonnet v2 はオンデマンド直接呼び出し非対応（inference profile が必要）のため、本 PoC では Claude 3.5 Haiku を使用しています。
 
 ### 2. Terraform でデプロイ
 
@@ -141,7 +141,7 @@ aws dynamodb scan --table-name multimodal-dev-results
 | リソース | 単価 | 月間想定 | 小計 |
 |---------|------|---------|------|
 | Lambda | $0.0000002/リクエスト | 500回 | ~$0.01 |
-| Bedrock Claude 3 Haiku | $0.25/1M input tokens | 500回×1000tokens | ~$0.13 |
+| Bedrock Claude 3.5 Haiku | $0.80/1M input tokens | 500回×1000tokens | ~$0.40 |
 | S3 | $0.025/GB | 1GB | ~$0.03 |
 | DynamoDB | PAY_PER_REQUEST | 500件 | ~$0.01 |
 | **合計** | | | **~$1.55/月** |
@@ -260,7 +260,7 @@ GitHub Actions で Python ユニットテスト・Terraform 静的解析（Check
 
 ### Bedrock / Lambda
 
-- **Bedrock のマルチモーダル API はファイルサイズに注意**: 大きな PDF をそのままバイナリで渡すと `ValidationException` になる。Claude 3 Haiku は画像・PDF を base64 エンコードして渡す仕様のため、ファイルサイズ上限（5MB / ページ数）を事前に確認する。
+- **Bedrock のマルチモーダル API はファイルサイズに注意**: 大きな PDF をそのままバイナリで渡すと `ValidationException` になる。Claude 3.5 Haiku は画像・PDF を base64 エンコードして渡す仕様のため、ファイルサイズ上限（5MB / ページ数）を事前に確認する。
 - **ファイル種別の判定はファイル名より MIME タイプが確実**: 拡張子が `.pdf` でも中身が壊れている場合がある。Lambda 内で拡張子ベースで判定しつつ、Bedrock へのリクエスト前にファイルの先頭バイトで MIME タイプを検証するとより堅牢。
 - **Bedrock のレスポンス解析は `content[0]["text"]` を参照**: `invoke_model()` のレスポンスは `response["body"].read()` で読み取り、`json.loads()` 後に `result["content"][0]["text"]` を取得する。階層が深いため最初は混乱しやすい。
 

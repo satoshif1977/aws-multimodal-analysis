@@ -9,3 +9,6 @@ lambda.zip
 __pycache__/
 *.pyc
 .env
+
+# draw.io バックアップ
+.*.bkp

@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.1] - 2026-05-26
+
+### Added
+- `docs/multimodal-document-analysis.drawio` / `.png` を追加（未追跡だったため commit）
+- `.gitignore` に draw.io バックアップ（`.*.bkp`）パターンを追加
+
+### Fixed
+- README のモデル名を `Claude 3 Haiku` → `Claude 3.5 Haiku` に統一（5か所）
+- 推定コストの単価を Claude 3.5 Haiku の実際の料金（$0.80/1M tokens）に修正
+
 ## [1.3.0] - 2026-05-19
 
 ### Added
