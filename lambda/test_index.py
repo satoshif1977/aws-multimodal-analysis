@@ -67,7 +67,7 @@ class TestHandler:
     @patch.dict(
         "os.environ",
         {
-            "BEDROCK_MODEL_ID": "anthropic.claude-3-5-haiku-20241022-v1:0",
+            "BEDROCK_MODEL_ID": "jp.anthropic.claude-haiku-4-5-20251001-v1:0",
             "DYNAMODB_TABLE": "test-table",
         },
     )
