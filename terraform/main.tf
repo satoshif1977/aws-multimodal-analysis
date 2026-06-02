@@ -8,6 +8,9 @@
 #   CloudWatch Logs（ログ保存）
 # ──────────────────────────────────────────────────────────
 
+data "aws_region" "current" {}
+data "aws_caller_identity" "current" {}
+
 locals {
   name_prefix = "${var.project_name}-${var.environment}"
   bucket_name = var.s3_bucket_suffix != "" ? "${local.name_prefix}-docs-${var.s3_bucket_suffix}" : "${local.name_prefix}-docs"
@@ -52,12 +55,27 @@ resource "aws_s3_bucket_versioning" "docs" {
   }
 }
 
+# マルチパートアップロード未完了ファイルの自動削除（CKV_AWS_300）
+resource "aws_s3_bucket_lifecycle_configuration" "docs" {
+  bucket = aws_s3_bucket.docs.id
+
+  rule {
+    id     = "abort-incomplete-multipart-uploads"
+    status = "Enabled"
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
 # ── DynamoDB（解析結果の保存） ─────────────────────────────
 resource "aws_dynamodb_table" "results" {
-  name         = "${local.name_prefix}-results"
-  billing_mode = var.dynamodb_billing_mode
-  hash_key     = "document_id" # S3 オブジェクトキー
-  range_key    = "analyzed_at" # 解析日時（ISO 8601）
+  name                        = "${local.name_prefix}-results"
+  billing_mode                = var.dynamodb_billing_mode
+  hash_key                    = "document_id" # S3 オブジェクトキー
+  range_key                   = "analyzed_at" # 解析日時（ISO 8601）
+  deletion_protection_enabled = true
 
   attribute {
     name = "document_id"
@@ -73,14 +91,12 @@ resource "aws_dynamodb_table" "results" {
   ttl {
     attribute_name = "expires_at"
     enabled        = true
-    # TODO: Lambda 側で expires_at（例: 90日後の Unix タイム）を設定する
   }
 
-  # TODO: 本番では point_in_time_recovery を有効にする
-  # point_in_time_recovery { enabled = true }
-
-  # TODO: 本番では KMS 暗号化を有効にする
-  # server_side_encryption { enabled = true }
+  # PITR（Point-in-Time Recovery）
+  point_in_time_recovery {
+    enabled = true
+  }
 }
 
 # ── IAM ロール ─────────────────────────────────────────────
@@ -118,11 +134,13 @@ resource "aws_iam_role_policy" "lambda_permissions" {
         # TODO: 本番では特定プレフィックスのみに絞る
       },
       {
-        # Bedrock 呼び出し
-        Effect   = "Allow"
-        Action   = ["bedrock:InvokeModel"]
-        Resource = "*"
-        # TODO: 本番では使用モデルの ARN に絞る
+        # Bedrock 呼び出し（ファウンデーションモデル + クロスリージョン推論プロファイル）
+        Effect = "Allow"
+        Action = ["bedrock:InvokeModel"]
+        Resource = [
+          "arn:aws:bedrock:${data.aws_region.current.name}::foundation-model/anthropic.*",
+          "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/*"
+        ]
       },
       {
         # DynamoDB への書き込み
@@ -170,6 +188,10 @@ resource "aws_lambda_function" "main" {
       ALLOWED_EXTENSIONS = join(",", var.s3_allowed_extensions)
       LOG_LEVEL          = "INFO"
     }
+  }
+
+  tracing_config {
+    mode = "PassThrough"
   }
 
   depends_on = [

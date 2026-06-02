@@ -49,7 +49,7 @@ graph LR
     A[ユーザー] -->|ファイルアップロード| B[S3 バケット]
     B -->|ObjectCreated イベント| C[Lambda]
     C -->|ファイル取得| B
-    C -->|マルチモーダル解析| D[Amazon Bedrock\nClaude 3.5 Haiku]
+    C -->|マルチモーダル解析| D[Amazon Bedrock\nClaude Haiku 4.5]
     D -->|解析結果 JSON| C
     C -->|構造化データ保存| E[DynamoDB]
     C -->|ログ出力| F[CloudWatch Logs]
@@ -94,9 +94,9 @@ Lambda が起動
 
 ### 1. Bedrock モデルのアクセス許可
 
-AWS コンソール → Amazon Bedrock → モデルアクセス → **Claude 3.5 Haiku を有効化**
+AWS コンソール → Amazon Bedrock → モデルアクセス → **Claude Haiku 4.5 を有効化**
 
-> **Note:** Claude 3.5 Sonnet v2 はオンデマンド直接呼び出し非対応（inference profile が必要）のため、本 PoC では Claude 3.5 Haiku を使用しています。
+> **Note:** クロスリージョン推論プロファイル（`jp.anthropic.claude-haiku-4-5-20251001-v1:0`）を使用しています。東京リージョン（ap-northeast-1）で利用可能です。
 
 ### 2. Terraform でデプロイ
 
@@ -141,12 +141,12 @@ aws dynamodb scan --table-name multimodal-dev-results
 | リソース | 単価 | 月間想定 | 小計 |
 |---------|------|---------|------|
 | Lambda | $0.0000002/リクエスト | 500回 | ~$0.01 |
-| Bedrock Claude 3.5 Haiku | $0.80/1M input tokens | 500回×1000tokens | ~$0.40 |
+| Bedrock Claude Haiku 4.5 | $0.80/1M input tokens | 500回×1000tokens | ~$0.40 |
 | S3 | $0.025/GB | 1GB | ~$0.03 |
 | DynamoDB | PAY_PER_REQUEST | 500件 | ~$0.01 |
 | **合計** | | | **~$1.55/月** |
 
-> ⚠️ Bedrock の画像解析はテキストより高コスト。大量処理時は Haiku に切り替えを検討。
+> ⚠️ Bedrock の画像解析はテキストより高コスト。大量処理時は Haiku 4.5（デフォルト）を維持し、精度が必要な場合のみ Sonnet 4.5 に切り替えを検討。
 
 ---
 

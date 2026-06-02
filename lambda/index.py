@@ -44,10 +44,10 @@ MAX_FILE_SIZE_MB = 5  # Bedrock の画像サイズ制限
 # TTL: 解析結果の保持期間（90日）
 TTL_DAYS = 90
 
-# ── AWS クライアント ───────────────────────────────────────
-s3_client = boto3.client("s3")
-bedrock_client = boto3.client("bedrock-runtime", region_name="ap-northeast-1")
-dynamodb = boto3.resource("dynamodb")
+# ── AWS クライアント（モジュールレベルでウォームスタート時に再利用） ──
+_s3_client = boto3.client("s3")
+_bedrock_client = boto3.client("bedrock-runtime", region_name="ap-northeast-1")
+_dynamodb = boto3.resource("dynamodb", region_name="ap-northeast-1")
 
 
 # ── ファイル検証 ───────────────────────────────────────────
@@ -76,7 +76,7 @@ def get_file_from_s3(bucket: str, key: str) -> bytes:
 
     TODO: 大きなファイルはストリーミングで処理する
     """
-    response = s3_client.get_object(Bucket=bucket, Key=key)
+    response = _s3_client.get_object(Bucket=bucket, Key=key)
     return response["Body"].read()
 
 
@@ -173,7 +173,7 @@ def analyze_with_bedrock(file_bytes: bytes, key: str) -> Dict[str, Any]:
         ],
     })
 
-    response = bedrock_client.invoke_model(
+    response = _bedrock_client.invoke_model(
         modelId=BEDROCK_MODEL_ID,
         body=body,
         contentType="application/json",
@@ -210,7 +210,7 @@ def save_to_dynamodb(document_id: str, bucket: str, key: str, result: Dict[str, 
     TODO: 同一ファイルの再解析時に上書きするか別レコードにするか設計する
     TODO: 解析失敗時も status=error でレコードを残してトラッキングする
     """
-    table = dynamodb.Table(DYNAMODB_TABLE)
+    table = _dynamodb.Table(DYNAMODB_TABLE)
     now = datetime.now(timezone.utc)
     expires_at = int((now + timedelta(days=TTL_DAYS)).timestamp())
 

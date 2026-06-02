@@ -45,9 +45,17 @@ if not s3_bucket:
     st.info("💡 `terraform output s3_bucket_name` で確認できます。")
     st.stop()
 
-# ── AWS クライアント ─────────────────────────────────────────
-s3_client = boto3.client("s3", region_name=aws_region)
-dynamodb = boto3.resource("dynamodb", region_name=aws_region)
+# ── AWS クライアント（キャッシュで再利用） ──────────────────
+@st.cache_resource
+def get_s3_client(region: str):
+    return boto3.client("s3", region_name=region)
+
+@st.cache_resource
+def get_dynamodb_resource(region: str):
+    return boto3.resource("dynamodb", region_name=region)
+
+s3_client = get_s3_client(aws_region)
+dynamodb = get_dynamodb_resource(aws_region)
 
 # ── タブ構成 ────────────────────────────────────────────────
 tab_upload, tab_results = st.tabs(["📤 ファイルアップロード", "📊 解析結果一覧"])

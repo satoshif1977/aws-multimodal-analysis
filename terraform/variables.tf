@@ -20,10 +20,10 @@ variable "aws_region" {
 variable "bedrock_model_id" {
   description = "使用する Bedrock マルチモーダルモデル ID"
   type        = string
-  default     = "anthropic.claude-3-5-sonnet-20241022-v2:0"
+  default     = "jp.anthropic.claude-haiku-4-5-20251001-v1:0"
   # 候補（マルチモーダル対応モデル）:
-  #   anthropic.claude-3-5-sonnet-20241022-v2:0  （高精度・推奨）
-  #   anthropic.claude-3-5-haiku-20241022-v1:0     （低コスト・簡易解析向け）
+  #   jp.anthropic.claude-haiku-4-5-20251001-v1:0   （低コスト・PoC 推奨 / クロスリージョン推論）
+  #   jp.anthropic.claude-sonnet-4-5-20251001-v1:0  （高精度・本番向け）
   # TODO: 本番では解析精度とコストのバランスで選定する
 }
 
@@ -71,6 +71,6 @@ variable "lambda_memory_size" {
 variable "log_retention_days" {
   description = "CloudWatch Logs の保持日数"
   type        = number
-  default     = 3
+  default     = 7
   # TODO: 本番では 30〜90 日に延長する
 }
