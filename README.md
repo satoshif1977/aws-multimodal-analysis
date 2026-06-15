@@ -219,11 +219,24 @@ pip install pytest boto3
 pytest tests/ -v
 ```
 
+### Go ユニットテスト（AWS 接続不要）
+
+Go Lambda（`lambda_go/`）のヘルパー関数・ファイルバリデーション・Bedrock プロンプト生成ロジックを検証します。
+
+```bash
+cd lambda_go
+go test ./... -v
+```
+
+| テストファイル | テスト数 | 主な検証内容 |
+|---|---|---|
+| `lambda_go/main_test.go` | 24 件 | 環境変数・拡張子バリデーション・メディアタイプ判定・プロンプト生成・Handler 入力バリデーション |
+
 ---
 
 ## CI / セキュリティスキャン
 
-GitHub Actions で Python ユニットテスト・Terraform 静的解析（Checkov）を自動実行しています。
+GitHub Actions で Python ユニットテスト・Go ユニットテスト・Terraform 静的解析（Checkov）を自動実行しています。
 
 ### 実施内容
 
@@ -231,6 +244,7 @@ GitHub Actions で Python ユニットテスト・Terraform 静的解析（Check
 |---|---|
 | terraform fmt / validate | フォーマット・構文チェック |
 | Python ユニットテスト | pytest で Lambda 関数のロジックを検証 |
+| Go ユニットテスト | `go test` で Go Lambda のロジックを検証 |
 | Checkov セキュリティスキャン | IaC のセキュリティポリシー違反を検出（soft_fail: false） |
 
 ### セキュリティ対応（Terraform で修正した内容）
