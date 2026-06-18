@@ -1,7 +1,9 @@
 # aws-multimodal-analysis
 
 ![CI](https://github.com/satoshif1977/aws-multimodal-analysis/actions/workflows/ci.yml/badge.svg)
+![Go Test](https://github.com/satoshif1977/aws-multimodal-analysis/actions/workflows/go-test.yml/badge.svg)
 ![AWS](https://img.shields.io/badge/AWS-232F3E?style=flat&logo=amazon-aws&logoColor=white)
+![Go](https://img.shields.io/badge/Go-1.22-00ADD8?style=flat&logo=go&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
 ![Terraform](https://img.shields.io/badge/Terraform-623CE4?style=flat&logo=terraform&logoColor=white)
 ![Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-orange?logo=anthropic)

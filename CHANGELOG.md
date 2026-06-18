@@ -4,12 +4,42 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-## [1.6.0] - 2026-06-16
+## [1.9.0] - 2026-06-18
+
+### Changed
+- `go-test.yml`: actions/checkout v4→v6・go-version 1.21→1.22 に更新（go.mod との整合）
+- README に Go Test CI バッジ・Go 1.22 言語バッジを追加
+
+## [1.8.0] - 2026-06-16
 
 ### Changed
 - boto3 >=1.43.14 -> >=1.43.29
 - actions/setup-go v5 -> v6
 - streamlit >=1.57.0 -> >=1.58.0
+
+## [1.7.0] - 2026-06-15
+
+### Added
+- README に Go ユニットテスト（24件）・CI ワークフロー表を追記
+
+## [1.6.0] - 2026-06-11
+
+### Added
+- `lambda_go/main_test.go`: Go Lambda ユニットテスト 24 件追加
+  - getEnv / isAllowedExt / getExt / mediaType / buildPrompt / Handler（空イベント・未対応拡張子・サイズ超過）
+- `lambda_go/go.sum`: 依存関係ロックファイル追加
+- `.github/workflows/go-test.yml`: Go テスト CI 追加（`lambda_go/**` 変更時に自動実行）
+
+### Changed
+- Terraform IaC セキュリティ強化（`terraform/main.tf`）
+  - DynamoDB: PITR・`deletion_protection_enabled = true` を追加
+  - Lambda: `tracing_config { mode = "PassThrough" }` を追加（X-Ray コスト無料）
+  - Bedrock IAM: `Resource="*"` → 特定 ARN パターンに絞る（foundation-model / inference-profile）
+  - S3: ライフサイクルルールでマルチパートアップロード未完了を 7 日後に自動削除（CKV_AWS_300 対応）
+- Python 品質向上
+  - `lambda/index.py`: boto3 クライアント変数名を `_` プレフィックスに統一
+  - `app.py`: `@st.cache_resource` でクライアントを再利用（毎 rerun での再生成を防止）
+- ユニットテスト強化（10 件→16 件）: TestAnalyzeWithBedrock / TestSaveToDynamoDB を各 2〜3 ケース追加
 
 ## [1.5.0] - 2026-06-01
 
