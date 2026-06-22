@@ -16,7 +16,7 @@ jobs:
       run:
         working-directory: terraform
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: hashicorp/setup-terraform@v4
         with:
           terraform_version: "~1.5"
@@ -33,7 +33,7 @@ jobs:
     env:
       AWS_DEFAULT_REGION: ap-northeast-1
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
@@ -48,7 +48,7 @@ jobs:
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Run Checkov
         uses: bridgecrewio/checkov-action@v12
         with:
