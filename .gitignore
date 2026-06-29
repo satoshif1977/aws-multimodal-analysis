@@ -12,3 +12,7 @@ __pycache__/
 
 # draw.io バックアップ
 .*.bkp
+
+# Node.js
+node_modules/
+dist/

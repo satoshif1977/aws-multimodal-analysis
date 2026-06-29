@@ -1,0 +1,29 @@
+name: TypeScript Test
+
+on:
+  push:
+    paths:
+      - "client_ts/**"
+  pull_request:
+    paths:
+      - "client_ts/**"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: client_ts/package-lock.json
+      - name: Install dependencies
+        working-directory: client_ts
+        run: npm ci
+      - name: Type check
+        working-directory: client_ts
+        run: npm run typecheck
+      - name: Run tests
+        working-directory: client_ts
+        run: npm test
