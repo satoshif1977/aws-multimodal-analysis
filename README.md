@@ -1,9 +1,11 @@
 # aws-multimodal-analysis
 
 ![CI](https://github.com/satoshif1977/aws-multimodal-analysis/actions/workflows/ci.yml/badge.svg)
-![Go Test](https://github.com/satoshif1977/aws-multimodal-analysis/actions/workflows/go-test.yml/badge.svg)
+[![Go Test](https://github.com/satoshif1977/aws-multimodal-analysis/actions/workflows/go-test.yml/badge.svg)](https://github.com/satoshif1977/aws-multimodal-analysis/actions/workflows/go-test.yml)
+[![TypeScript Test](https://github.com/satoshif1977/aws-multimodal-analysis/actions/workflows/ts-test.yml/badge.svg)](https://github.com/satoshif1977/aws-multimodal-analysis/actions/workflows/ts-test.yml)
 ![AWS](https://img.shields.io/badge/AWS-232F3E?style=flat&logo=amazon-aws&logoColor=white)
 ![Go](https://img.shields.io/badge/Go-1.22-00ADD8?style=flat&logo=go&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
 ![Python](https://img.shields.io/badge/Python-3776AB?style=flat&logo=python&logoColor=white)
 ![Terraform](https://img.shields.io/badge/Terraform-623CE4?style=flat&logo=terraform&logoColor=white)
 ![Claude Code](https://img.shields.io/badge/Built%20with-Claude%20Code-orange?logo=anthropic)
@@ -234,6 +236,21 @@ go test ./... -v
 |---|---|---|
 | `lambda_go/main_test.go` | 24 件 | 環境変数・拡張子バリデーション・メディアタイプ判定・プロンプト生成・Handler 入力バリデーション |
 
+### TypeScript ユニットテスト（AWS 接続不要）
+
+TypeScript クライアント（`client_ts/`）の画像・ドキュメント分析関数を Jest でテストします。
+
+```bash
+cd client_ts
+npm ci
+npm test
+# 43件 PASS（analyze 正常/エラー・getAnalysisResult・listResults・型バリデーション等）
+```
+
+| テストファイル | テスト数 | 主な検証内容 |
+|---|---|---|
+| `client_ts/client.test.ts` | 43 件 | analyze 正常系・エラーハンドリング・getAnalysisResult・listResults |
+
 ---
 
 ## CI / セキュリティスキャン
@@ -246,7 +263,8 @@ GitHub Actions で Python ユニットテスト・Go ユニットテスト・Ter
 |---|---|
 | terraform fmt / validate | フォーマット・構文チェック |
 | Python ユニットテスト | pytest で Lambda 関数のロジックを検証 |
-| Go ユニットテスト | `go test` で Go Lambda のロジックを検証 |
+| Go ユニットテスト | `go test` で Go Lambda のロジックを検証（24件） |
+| TypeScript テスト | Jest で TypeScript クライアントを検証（43件） |
 | Checkov セキュリティスキャン | IaC のセキュリティポリシー違反を検出（soft_fail: false） |
 
 ### セキュリティ対応（Terraform で修正した内容）
