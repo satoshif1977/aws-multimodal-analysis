@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.10.0] - 2026-07-10
+
+### Added
+- `lambda/test_index_detail.py`: Python ユニットテスト 16 件 → 44 件に拡充（詳細ケース・エラー系・マルチモーダル入力検証追加）
+
+### Changed
+- docs: README に TypeScript テストバッジ・CI テーブル・テスト手順を追記
+- Dependabot: `boto3` / `actions/setup-node` v4 → v6 / `actions/checkout` v4 → v7 更新
+
 ## [1.9.0] - 2026-06-18
 
 ### Changed
