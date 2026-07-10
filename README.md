@@ -3,6 +3,7 @@
 ![CI](https://github.com/satoshif1977/aws-multimodal-analysis/actions/workflows/ci.yml/badge.svg)
 [![Go Test](https://github.com/satoshif1977/aws-multimodal-analysis/actions/workflows/go-test.yml/badge.svg)](https://github.com/satoshif1977/aws-multimodal-analysis/actions/workflows/go-test.yml)
 [![TypeScript Test](https://github.com/satoshif1977/aws-multimodal-analysis/actions/workflows/ts-test.yml/badge.svg)](https://github.com/satoshif1977/aws-multimodal-analysis/actions/workflows/ts-test.yml)
+[![codecov](https://codecov.io/gh/satoshif1977/aws-multimodal-analysis/graph/badge.svg)](https://codecov.io/gh/satoshif1977/aws-multimodal-analysis)
 ![AWS](https://img.shields.io/badge/AWS-232F3E?style=flat&logo=amazon-aws&logoColor=white)
 ![Go](https://img.shields.io/badge/Go-1.22-00ADD8?style=flat&logo=go&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)

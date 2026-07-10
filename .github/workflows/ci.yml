@@ -38,9 +38,15 @@ jobs:
         with:
           python-version: "3.11"
       - name: install deps
-        run: pip install pytest boto3 botocore
+        run: pip install pytest pytest-cov boto3 botocore
       - name: pytest
-        run: pytest lambda/test_index.py -v
+        run: pytest lambda/test_index.py -v --cov=lambda --cov-report=xml
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          flags: python
+          fail_ci_if_error: false
 
   security:
     name: Checkov セキュリティスキャン
