@@ -182,3 +182,67 @@ func TestHandler_MultipleRecordsSkipped(t *testing.T) {
 		}
 	}
 }
+
+// ── getEnv 追加 ──────────────────────────────────────────────────────────────
+
+func TestGetEnv_EmptyEnvValue(t *testing.T) {
+	// 空文字列が設定されている場合は fallback を返すこと（v != "" 条件）
+	t.Setenv("TEST_EMPTY_KEY", "")
+	if got := getEnv("TEST_EMPTY_KEY", "fallback"); got != "fallback" {
+		t.Errorf("empty env value should fall through to fallback, got %q", got)
+	}
+}
+
+// ── isAllowedExt 追加 ────────────────────────────────────────────────────────
+
+func TestIsAllowedExt_DocxNotAllowed(t *testing.T) {
+	if isAllowedExt("document.docx") {
+		t.Error("docx should not be allowed")
+	}
+}
+
+// ── mediaType 追加 ───────────────────────────────────────────────────────────
+
+func TestMediaType_UpperCaseJPG(t *testing.T) {
+	// getExt が ToLower するため大文字 JPG も image/jpeg になること
+	if got := mediaType("photo.JPG"); got != "image/jpeg" {
+		t.Errorf("got %q, want image/jpeg", got)
+	}
+}
+
+// ── buildPrompt 追加 ─────────────────────────────────────────────────────────
+
+func TestBuildPrompt_MixedCaseInvoice(t *testing.T) {
+	// "Invoice"（先頭大文字）も ToLower で一致すること
+	prompt := buildPrompt("Invoice_2026.pdf")
+	if !strings.Contains(prompt, "請求書") {
+		t.Error("mixed-case Invoice prompt should contain 請求書")
+	}
+}
+
+// ── Handler 境界値テスト ─────────────────────────────────────────────────────
+
+func TestHandler_FileSizeExactLimit(t *testing.T) {
+	// ちょうど 5MB はサイズ超過にならない（条件が > であり >= でない）
+	// → スキップされず S3 呼び出しへ進み、error ステータスになる
+	const fiveMB = 5 * 1024 * 1024
+	event := events.S3Event{
+		Records: []events.S3EventRecord{
+			{S3: events.S3Entity{
+				Bucket: events.S3Bucket{Name: "test-bucket"},
+				Object: events.S3Object{Key: "exactly5mb.png", Size: fiveMB},
+			}},
+		},
+	}
+	result, err := Handler(context.Background(), event)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	records := result["body"].([]ProcessedRecord)
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	if records[0].Status == "skipped" {
+		t.Error("exactly 5MB should not be skipped (size check is strict >)")
+	}
+}
