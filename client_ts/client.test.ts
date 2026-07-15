@@ -66,6 +66,16 @@ describe("validateFile", () => {
     const sizeBytes = 5 * 1024 * 1024 - 1;
     expect(validateFile("test.png", sizeBytes).valid).toBe(true);
   });
+
+  it("should accept file with 0 bytes", () => {
+    expect(validateFile("test.png", 0).valid).toBe(true);
+  });
+
+  it("should reject .gif extension", () => {
+    const result = validateFile("animation.gif", 1024);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain(".gif");
+  });
 });
 
 // ── getDocumentType ───────────────────────────────────────
@@ -123,6 +133,17 @@ describe("buildPrompt", () => {
     expect(buildPrompt("estimate.png")).toContain("JSON");
     expect(buildPrompt("other.png")).toContain("JSON");
   });
+
+  it("should return invoice prompt for Japanese 請求 keyword", () => {
+    const prompt = buildPrompt("請求書_202401.pdf");
+    expect(prompt).toContain("請求書");
+    expect(prompt).toContain("invoice_number");
+  });
+
+  it("should return estimate prompt containing total_amount", () => {
+    const prompt = buildPrompt("estimate_001.png");
+    expect(prompt).toContain("total_amount");
+  });
 });
 
 // ── getMediaType ──────────────────────────────────────────
@@ -150,6 +171,10 @@ describe("getMediaType", () => {
   it("should be case-insensitive", () => {
     expect(getMediaType(".PNG")).toBe("image/png");
     expect(getMediaType(".JPG")).toBe("image/jpeg");
+  });
+
+  it("should return image/jpeg for .JPEG (uppercase)", () => {
+    expect(getMediaType(".JPEG")).toBe("image/jpeg");
   });
 });
 
@@ -186,6 +211,11 @@ describe("buildBedrockPayload", () => {
     const imageContent = payload.messages[0].content.find((c) => c.type === "image");
     expect(imageContent?.source?.media_type).toBe("application/pdf");
   });
+
+  it("should include exactly 2 content items (image + text)", () => {
+    const payload = buildBedrockPayload(sampleBase64, "test.png");
+    expect(payload.messages[0].content).toHaveLength(2);
+  });
 });
 
 // ── extractJsonFromText ───────────────────────────────────
@@ -213,6 +243,10 @@ describe("extractJsonFromText", () => {
   it("should extract nested JSON", () => {
     const text = 'Result: {"items": [{"name": "Item1", "amount": 100}]}';
     expect(extractJsonFromText(text)).toEqual({ items: [{ name: "Item1", amount: 100 }] });
+  });
+
+  it("should return raw_text for empty string", () => {
+    expect(extractJsonFromText("")).toEqual({ raw_text: "" });
   });
 });
 
@@ -277,5 +311,15 @@ describe("buildDynamoDbItem", () => {
       "custom-model-id",
     );
     expect(item.model_id).toBe("custom-model-id");
+  });
+
+  it("should preserve complex nested result object as-is", () => {
+    const result = {
+      document_type: "請求書",
+      total_amount: 100000,
+      items: [{ name: "item1", amount: 50000 }],
+    };
+    const item = buildDynamoDbItem("b/k", "b", "k", result);
+    expect(item.result).toEqual(result);
   });
 });
