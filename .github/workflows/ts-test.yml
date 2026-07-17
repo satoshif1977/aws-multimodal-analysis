@@ -28,7 +28,7 @@ jobs:
         working-directory: client_ts
         run: npm run test:coverage
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           directory: client_ts/coverage
