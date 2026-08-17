@@ -353,3 +353,203 @@ func BenchmarkGetExt(b *testing.B) {
 		getExt("invoices/2026/document.pdf")
 	}
 }
+
+// ── isAllowedExt 追加テスト ───────────────────────────────
+
+func TestIsAllowedExt_HiddenFile(t *testing.T) {
+	// ".hidden" → ext = ".hidden" → allowedExtensions に含まれない
+	if isAllowedExt(".hidden") {
+		t.Error(".hidden should not be allowed")
+	}
+}
+
+func TestIsAllowedExt_TarGz(t *testing.T) {
+	// "archive.tar.gz" → ext = ".gz" → false
+	if isAllowedExt("archive.tar.gz") {
+		t.Error(".gz should not be allowed")
+	}
+}
+
+func TestIsAllowedExt_Webp_NotAllowed(t *testing.T) {
+	// デフォルトの allowedExtensions に .webp は含まれない
+	if isAllowedExt("animation.webp") {
+		t.Error(".webp should not be allowed with default extensions")
+	}
+}
+
+func TestIsAllowedExt_ExeNotAllowed(t *testing.T) {
+	if isAllowedExt("setup.exe") {
+		t.Error(".exe should not be allowed")
+	}
+}
+
+// ── getExt 追加テスト ─────────────────────────────────────
+
+func TestGetExt_DotOnly(t *testing.T) {
+	// "." → strings.LastIndex = 0 → "."[0:] = "." → lower = "."
+	if got := getExt("."); got != "." {
+		t.Errorf("got %q, want %q", got, ".")
+	}
+}
+
+func TestGetExt_HiddenFile(t *testing.T) {
+	// ".gitignore" → ext = ".gitignore"
+	if got := getExt(".gitignore"); got != ".gitignore" {
+		t.Errorf("got %q, want .gitignore", got)
+	}
+}
+
+func TestGetExt_PNG(t *testing.T) {
+	if got := getExt("image.png"); got != ".png" {
+		t.Errorf("got %q, want .png", got)
+	}
+}
+
+// ── buildPrompt 追加テスト ────────────────────────────────
+
+func TestBuildPrompt_InvoiceContainsTotalAmount(t *testing.T) {
+	prompt := buildPrompt("invoice.pdf")
+	if !strings.Contains(prompt, "total_amount") {
+		t.Error("invoice prompt should contain 'total_amount'")
+	}
+}
+
+func TestBuildPrompt_EstimateContainsValidUntil(t *testing.T) {
+	prompt := buildPrompt("estimate.pdf")
+	if !strings.Contains(prompt, "valid_until") {
+		t.Error("estimate prompt should contain 'valid_until'")
+	}
+}
+
+func TestBuildPrompt_DefaultContainsNull(t *testing.T) {
+	prompt := buildPrompt("general.pdf")
+	if !strings.Contains(prompt, "null") {
+		t.Error("default prompt should mention null for missing values")
+	}
+}
+
+func TestBuildPrompt_ReportUsesDefault(t *testing.T) {
+	prompt := buildPrompt("report_2026.pdf")
+	if !strings.Contains(prompt, "業務文書") {
+		t.Error("report key should use default prompt containing '業務文書'")
+	}
+}
+
+func TestBuildPrompt_ContractUsesDefault(t *testing.T) {
+	prompt := buildPrompt("contract.pdf")
+	if !strings.Contains(prompt, "業務文書") {
+		t.Error("contract key should use default prompt")
+	}
+}
+
+// ── ProcessedRecord 追加テスト ────────────────────────────
+
+func TestProcessedRecord_SuccessStatus_ReasonOmitted(t *testing.T) {
+	rec := ProcessedRecord{Key: "invoice.pdf", Status: "success"}
+	b, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+	if strings.Contains(string(b), "reason") {
+		t.Error("reason should be omitted when empty (omitempty)")
+	}
+}
+
+func TestProcessedRecord_KeyPreserved(t *testing.T) {
+	rec := ProcessedRecord{Key: "invoices/2026/doc.pdf", Status: "skipped", Reason: "test"}
+	b, _ := json.Marshal(rec)
+	var got ProcessedRecord
+	if err := json.Unmarshal(b, &got); err != nil {
+		t.Fatalf("unmarshal error: %v", err)
+	}
+	if got.Key != "invoices/2026/doc.pdf" {
+		t.Errorf("Key = %q, want invoices/2026/doc.pdf", got.Key)
+	}
+}
+
+// ── Handler 追加テスト ────────────────────────────────────
+
+func TestHandler_ZeroSizeFile_NotSkippedBySize(t *testing.T) {
+	// size=0 は 0MB < 5MB でサイズチェック通過 → S3 取得エラーで "error" になる
+	event := events.S3Event{
+		Records: []events.S3EventRecord{
+			{S3: events.S3Entity{
+				Bucket: events.S3Bucket{Name: "test-bucket"},
+				Object: events.S3Object{Key: "empty.png", Size: 0},
+			}},
+		},
+	}
+	result, err := Handler(context.Background(), event)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	records := result["body"].([]ProcessedRecord)
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	// サイズ 0 は "skipped" にならない（S3エラーで "error"）
+	if records[0].Status == "skipped" {
+		t.Error("size=0 file should not be skipped by size check")
+	}
+}
+
+func TestHandler_RecordCountMatchesInputCount(t *testing.T) {
+	// 入力レコード数 = 出力レコード数（すべて skipped）
+	event := events.S3Event{
+		Records: []events.S3EventRecord{
+			{S3: events.S3Entity{Bucket: events.S3Bucket{Name: "b"}, Object: events.S3Object{Key: "a.txt", Size: 100}}},
+			{S3: events.S3Entity{Bucket: events.S3Bucket{Name: "b"}, Object: events.S3Object{Key: "b.csv", Size: 200}}},
+			{S3: events.S3Entity{Bucket: events.S3Bucket{Name: "b"}, Object: events.S3Object{Key: "c.sh", Size: 50}}},
+		},
+	}
+	result, _ := Handler(context.Background(), event)
+	records := result["body"].([]ProcessedRecord)
+	if len(records) != 3 {
+		t.Errorf("expected 3 records, got %d", len(records))
+	}
+}
+
+func TestHandler_SkippedRecordHasReason(t *testing.T) {
+	// スキップされたレコードには Reason が設定される
+	event := events.S3Event{
+		Records: []events.S3EventRecord{
+			{S3: events.S3Entity{
+				Bucket: events.S3Bucket{Name: "test-bucket"},
+				Object: events.S3Object{Key: "doc.txt", Size: 1024},
+			}},
+		},
+	}
+	result, _ := Handler(context.Background(), event)
+	records := result["body"].([]ProcessedRecord)
+	if len(records) != 1 {
+		t.Fatalf("expected 1 record, got %d", len(records))
+	}
+	if records[0].Status != "skipped" {
+		t.Errorf("expected skipped, got %q", records[0].Status)
+	}
+	if records[0].Reason == "" {
+		t.Error("skipped record should have a non-empty Reason")
+	}
+}
+
+// ── getEnv / 定数 追加テスト ──────────────────────────────
+
+func TestGetEnv_SpaceValueNotFallback(t *testing.T) {
+	// スペース文字は空文字でないため fallback しない
+	t.Setenv("MM_SPACE_KEY", " ")
+	if got := getEnv("MM_SPACE_KEY", "fallback"); got != " " {
+		t.Errorf("space value should not fall back: got %q", got)
+	}
+}
+
+func TestMaxFileSizeMB_IsPositive(t *testing.T) {
+	if maxFileSizeMB <= 0 {
+		t.Errorf("maxFileSizeMB should be positive, got %d", maxFileSizeMB)
+	}
+}
+
+func TestTTLDays_IsPositive(t *testing.T) {
+	if ttlDays <= 0 {
+		t.Errorf("ttlDays should be positive, got %d", ttlDays)
+	}
+}
