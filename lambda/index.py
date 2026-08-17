@@ -20,9 +20,8 @@ import base64
 import json
 import logging
 import os
-import uuid
-from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Tuple
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
@@ -36,9 +35,9 @@ BEDROCK_MODEL_ID = os.environ.get(
     "BEDROCK_MODEL_ID", "jp.anthropic.claude-haiku-4-5-20251001-v1:0"
 )
 DYNAMODB_TABLE = os.environ.get("DYNAMODB_TABLE", "multimodal-dev-results")
-ALLOWED_EXTENSIONS = os.environ.get(
-    "ALLOWED_EXTENSIONS", ".png,.jpg,.jpeg,.pdf"
-).split(",")
+ALLOWED_EXTENSIONS = os.environ.get("ALLOWED_EXTENSIONS", ".png,.jpg,.jpeg,.pdf").split(
+    ","
+)
 MAX_FILE_SIZE_MB = 5  # Bedrock の画像サイズ制限
 
 # TTL: 解析結果の保持期間（90日）
@@ -51,7 +50,7 @@ _dynamodb = boto3.resource("dynamodb", region_name="ap-northeast-1")
 
 
 # ── ファイル検証 ───────────────────────────────────────────
-def validate_file(key: str, size_bytes: int) -> Tuple[bool, str]:
+def validate_file(key: str, size_bytes: int) -> tuple[bool, str]:
     """
     ファイルの拡張子とサイズを検証する。
     戻り値: (OK かどうか, エラーメッセージ)
@@ -64,7 +63,10 @@ def validate_file(key: str, size_bytes: int) -> Tuple[bool, str]:
 
     size_mb = size_bytes / (1024 * 1024)
     if size_mb > MAX_FILE_SIZE_MB:
-        return False, f"ファイルサイズ超過: {size_mb:.1f}MB（上限 {MAX_FILE_SIZE_MB}MB）"
+        return (
+            False,
+            f"ファイルサイズ超過: {size_mb:.1f}MB（上限 {MAX_FILE_SIZE_MB}MB）",
+        )
 
     return True, ""
 
@@ -129,7 +131,7 @@ def build_prompt(key: str) -> str:
 
 
 # ── Bedrock でファイル解析 ─────────────────────────────────
-def analyze_with_bedrock(file_bytes: bytes, key: str) -> Dict[str, Any]:
+def analyze_with_bedrock(file_bytes: bytes, key: str) -> dict[str, Any]:
     """
     Bedrock（Claude マルチモーダル）でファイルを解析して結果を返す。
 
@@ -152,26 +154,28 @@ def analyze_with_bedrock(file_bytes: bytes, key: str) -> Dict[str, Any]:
     file_b64 = base64.standard_b64encode(file_bytes).decode("utf-8")
     prompt = build_prompt(key)
 
-    body = json.dumps({
-        "anthropic_version": "bedrock-2023-05-31",
-        "max_tokens": 1000,
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": file_b64,
+    body = json.dumps(
+        {
+            "anthropic_version": "bedrock-2023-05-31",
+            "max_tokens": 1000,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": media_type,
+                                "data": file_b64,
+                            },
                         },
-                    },
-                    {"type": "text", "text": prompt},
-                ],
-            }
-        ],
-    })
+                        {"type": "text", "text": prompt},
+                    ],
+                }
+            ],
+        }
+    )
 
     response = _bedrock_client.invoke_model(
         modelId=BEDROCK_MODEL_ID,
@@ -196,7 +200,9 @@ def analyze_with_bedrock(file_bytes: bytes, key: str) -> Dict[str, Any]:
 
 
 # ── DynamoDB に保存（サンプル実装） ───────────────────────
-def save_to_dynamodb(document_id: str, bucket: str, key: str, result: Dict[str, Any]) -> None:
+def save_to_dynamodb(
+    document_id: str, bucket: str, key: str, result: dict[str, Any]
+) -> None:
     """
     解析結果を DynamoDB に保存する。
 
@@ -211,7 +217,7 @@ def save_to_dynamodb(document_id: str, bucket: str, key: str, result: Dict[str, 
     TODO: 解析失敗時も status=error でレコードを残してトラッキングする
     """
     table = _dynamodb.Table(DYNAMODB_TABLE)
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     expires_at = int((now + timedelta(days=TTL_DAYS)).timestamp())
 
     item = {
@@ -230,7 +236,7 @@ def save_to_dynamodb(document_id: str, bucket: str, key: str, result: Dict[str, 
 
 
 # ── Lambda ハンドラー ──────────────────────────────────────
-def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     S3 イベントを受け取り、ファイルを解析して DynamoDB に保存する。
 
