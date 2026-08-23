@@ -323,3 +323,287 @@ describe("buildDynamoDbItem", () => {
     expect(item.result).toEqual(result);
   });
 });
+
+// ── validateFile / 追加エッジケース ───────────────────────────
+
+describe("validateFile / 追加エッジケース", () => {
+  it("should reject .svg extension", () => {
+    const result = validateFile("diagram.svg", 1024);
+    expect(result.valid).toBe(false);
+  });
+
+  it("should reject .bmp extension", () => {
+    const result = validateFile("image.bmp", 1024);
+    expect(result.valid).toBe(false);
+  });
+
+  it("should reject .webp extension", () => {
+    const result = validateFile("photo.webp", 1024);
+    expect(result.valid).toBe(false);
+  });
+
+  it("should accept .JPEG uppercase", () => {
+    expect(validateFile("photo.JPEG", 1024).valid).toBe(true);
+  });
+
+  it("should accept .PDF uppercase", () => {
+    expect(validateFile("doc.PDF", 1024).valid).toBe(true);
+  });
+
+  it("should accept .JPG uppercase", () => {
+    expect(validateFile("photo.JPG", 1024).valid).toBe(true);
+  });
+
+  it("should reject file just over 5MB", () => {
+    const sizeBytes = 5 * 1024 * 1024 + 1;
+    const result = validateFile("test.png", sizeBytes);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain("超過");
+  });
+
+  it("error message should include actual size", () => {
+    const sizeBytes = 10 * 1024 * 1024;
+    const result = validateFile("test.png", sizeBytes);
+    expect(result.error).toContain("10.0MB");
+  });
+
+  it("error message should include max size", () => {
+    const sizeBytes = 6 * 1024 * 1024;
+    const result = validateFile("test.png", sizeBytes);
+    expect(result.error).toContain("5MB");
+  });
+
+  it("should handle multi-dot filenames", () => {
+    expect(validateFile("photo.2024.01.png", 1024).valid).toBe(true);
+  });
+
+  it("should handle path with directories", () => {
+    expect(validateFile("uploads/images/test.jpg", 1024).valid).toBe(true);
+  });
+
+  it("should handle Japanese filename", () => {
+    expect(validateFile("請求書_2024.pdf", 1024).valid).toBe(true);
+  });
+});
+
+// ── getDocumentType / 追加パターン ────────────────────────────
+
+describe("getDocumentType / 追加パターン", () => {
+  it('should return "invoice" for "INVOICE" uppercase', () => {
+    expect(getDocumentType("INVOICE_001.png")).toBe("invoice");
+  });
+
+  it('should return "invoice" for path containing invoice', () => {
+    expect(getDocumentType("docs/invoices/2024/doc.pdf")).toBe("invoice");
+  });
+
+  it('should return "estimate" for path containing 見積', () => {
+    expect(getDocumentType("見積もり/2024_01.pdf")).toBe("estimate");
+  });
+
+  it('should return "generic" for empty string', () => {
+    expect(getDocumentType("")).toBe("generic");
+  });
+
+  it('should return "generic" for plain filename', () => {
+    expect(getDocumentType("report_2024.pdf")).toBe("generic");
+  });
+
+  it('should prioritize invoice over estimate when both present', () => {
+    expect(getDocumentType("invoice_estimate_combined.pdf")).toBe("invoice");
+  });
+
+  it('should return "invoice" for mixed case "Invoice"', () => {
+    expect(getDocumentType("Invoice_Q4.pdf")).toBe("invoice");
+  });
+
+  it('should return "estimate" for "Estimate" mixed case', () => {
+    expect(getDocumentType("Estimate_Draft.pdf")).toBe("estimate");
+  });
+});
+
+// ── getMediaType / 追加パターン ───────────────────────────────
+
+describe("getMediaType / 追加パターン", () => {
+  it("should return image/jpeg for .PDF uppercase", () => {
+    expect(getMediaType(".PDF")).toBe("application/pdf");
+  });
+
+  it("should return default for empty string", () => {
+    expect(getMediaType("")).toBe("image/jpeg");
+  });
+
+  it("should return default for .gif", () => {
+    expect(getMediaType(".gif")).toBe("image/jpeg");
+  });
+
+  it("should return default for .svg", () => {
+    expect(getMediaType(".svg")).toBe("image/jpeg");
+  });
+
+  it("should return default for .webp", () => {
+    expect(getMediaType(".webp")).toBe("image/jpeg");
+  });
+
+  it("should handle .Png mixed case", () => {
+    expect(getMediaType(".Png")).toBe("image/png");
+  });
+});
+
+// ── buildBedrockPayload / 追加パターン ────────────────────────
+
+describe("buildBedrockPayload / 追加パターン", () => {
+  it("should set correct media type for .jpeg files", () => {
+    const payload = buildBedrockPayload("dGVzdA==", "photo.jpeg");
+    const img = payload.messages[0].content.find((c) => c.type === "image");
+    expect(img?.source?.media_type).toBe("image/jpeg");
+  });
+
+  it("should use invoice prompt for invoice files", () => {
+    const payload = buildBedrockPayload("dGVzdA==", "invoice_2024.png");
+    const text = payload.messages[0].content.find((c) => c.type === "text");
+    expect(text?.text).toContain("請求書");
+  });
+
+  it("should use estimate prompt for estimate files", () => {
+    const payload = buildBedrockPayload("dGVzdA==", "estimate_001.jpg");
+    const text = payload.messages[0].content.find((c) => c.type === "text");
+    expect(text?.text).toContain("見積書");
+  });
+
+  it("should use generic prompt for generic files", () => {
+    const payload = buildBedrockPayload("dGVzdA==", "document.pdf");
+    const text = payload.messages[0].content.find((c) => c.type === "text");
+    expect(text?.text).toContain("業務文書");
+  });
+
+  it("should handle empty base64 string", () => {
+    const payload = buildBedrockPayload("", "test.png");
+    const img = payload.messages[0].content.find((c) => c.type === "image");
+    expect(img?.source?.data).toBe("");
+  });
+
+  it("should handle file without extension", () => {
+    const payload = buildBedrockPayload("dGVzdA==", "noext");
+    const img = payload.messages[0].content.find((c) => c.type === "image");
+    expect(img?.source?.media_type).toBe("image/jpeg");
+  });
+});
+
+// ── extractJsonFromText / 追加パターン ────────────────────────
+
+describe("extractJsonFromText / 追加パターン", () => {
+  it("should extract JSON with multiple levels of nesting", () => {
+    const text = '{"a": {"b": {"c": 1}}}';
+    expect(extractJsonFromText(text)).toEqual({ a: { b: { c: 1 } } });
+  });
+
+  it("should handle JSON with arrays", () => {
+    const text = '{"items": [1, 2, 3]}';
+    expect(extractJsonFromText(text)).toEqual({ items: [1, 2, 3] });
+  });
+
+  it("should return raw_text for text with only opening brace", () => {
+    expect(extractJsonFromText("{ no close")).toEqual({ raw_text: "{ no close" });
+  });
+
+  it("should return raw_text for text with only closing brace", () => {
+    expect(extractJsonFromText("no open }")).toEqual({ raw_text: "no open }" });
+  });
+
+  it("should extract JSON surrounded by markdown code block", () => {
+    const text = '```json\n{"key": "value"}\n```';
+    expect(extractJsonFromText(text)).toEqual({ key: "value" });
+  });
+
+  it("should handle JSON with null values", () => {
+    const text = '{"field": null}';
+    expect(extractJsonFromText(text)).toEqual({ field: null });
+  });
+
+  it("should handle JSON with boolean values", () => {
+    const text = '{"active": true, "deleted": false}';
+    expect(extractJsonFromText(text)).toEqual({ active: true, deleted: false });
+  });
+
+  it("should handle JSON with Japanese strings", () => {
+    const text = '{"名前": "テスト", "金額": 1000}';
+    expect(extractJsonFromText(text)).toEqual({ 名前: "テスト", 金額: 1000 });
+  });
+
+  it("should return raw_text for text with braces in wrong order", () => {
+    expect(extractJsonFromText("}wrong order{")).toEqual({ raw_text: "}wrong order{" });
+  });
+});
+
+// ── buildDocumentId / 追加パターン ────────────────────────────
+
+describe("buildDocumentId / 追加パターン", () => {
+  it("should handle nested key paths", () => {
+    expect(buildDocumentId("bucket", "a/b/c/file.png")).toBe("bucket/a/b/c/file.png");
+  });
+
+  it("should handle empty key", () => {
+    expect(buildDocumentId("bucket", "")).toBe("bucket/");
+  });
+
+  it("should handle empty bucket", () => {
+    expect(buildDocumentId("", "key.png")).toBe("/key.png");
+  });
+
+  it("should handle Japanese characters", () => {
+    expect(buildDocumentId("my-bucket", "請求書/2024.pdf")).toBe("my-bucket/請求書/2024.pdf");
+  });
+
+  it("should handle special characters in key", () => {
+    expect(buildDocumentId("bucket", "file with spaces.png")).toBe("bucket/file with spaces.png");
+  });
+});
+
+// ── buildDynamoDbItem / 追加パターン ──────────────────────────
+
+describe("buildDynamoDbItem / 追加パターン", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date("2026-06-15T12:00:00.000Z"));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it("should set status to success", () => {
+    const item = buildDynamoDbItem("id", "b", "k", {});
+    expect(item.status).toBe("success");
+  });
+
+  it("should set analyzed_at to current time", () => {
+    const item = buildDynamoDbItem("id", "b", "k", {});
+    expect(item.analyzed_at).toBe("2026-06-15T12:00:00.000Z");
+  });
+
+  it("expires_at should be greater than current timestamp", () => {
+    const item = buildDynamoDbItem("id", "b", "k", {});
+    const nowEpoch = Math.floor(new Date("2026-06-15T12:00:00.000Z").getTime() / 1000);
+    expect(item.expires_at).toBeGreaterThan(nowEpoch);
+  });
+
+  it("should handle empty result object", () => {
+    const item = buildDynamoDbItem("id", "b", "k", {});
+    expect(item.result).toEqual({});
+  });
+
+  it("should handle result with raw_text", () => {
+    const result = { raw_text: "could not parse" };
+    const item = buildDynamoDbItem("id", "b", "k", result);
+    expect(item.result).toEqual({ raw_text: "could not parse" });
+  });
+
+  it("should preserve all input parameters", () => {
+    const item = buildDynamoDbItem("doc-123", "my-bucket", "uploads/file.png", { type: "invoice" }, "custom-model");
+    expect(item.document_id).toBe("doc-123");
+    expect(item.s3_bucket).toBe("my-bucket");
+    expect(item.s3_key).toBe("uploads/file.png");
+    expect(item.model_id).toBe("custom-model");
+  });
+});
