@@ -40,7 +40,9 @@ jobs:
       - name: install deps
         run: pip install pytest pytest-cov boto3 botocore
       - name: pytest
-        run: pytest lambda/test_index.py -v --cov=lambda --cov-report=xml
+        # lambda/ 配下の全テストを実行する（単一ファイル指定だと
+        # test_index_detail.py / test_retry.py が CI で流れないため）
+        run: pytest lambda/ -v --cov=lambda --cov-report=xml
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v7
         with:

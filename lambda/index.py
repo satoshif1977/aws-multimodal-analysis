@@ -20,11 +20,15 @@ import base64
 import json
 import logging
 import os
+import sys
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import boto3
 from botocore.exceptions import ClientError
+
+sys.path.insert(0, os.path.dirname(__file__))
+from retry import RetryConfig, retry_call  # noqa: E402
 
 # ── ロガー設定 ─────────────────────────────────────────────
 logger = logging.getLogger()
@@ -42,6 +46,15 @@ MAX_FILE_SIZE_MB = 5  # Bedrock の画像サイズ制限
 
 # TTL: 解析結果の保持期間（90日）
 TTL_DAYS = 90
+
+# ── リトライ設定 ───────────────────────────────────────────
+# Bedrock は同時実行が増えると ThrottlingException を返すため、
+# 指数バックオフ + フルジッターで自動リトライする（retry.py を参照）
+RETRY_CONFIG = RetryConfig(
+    max_attempts=int(os.environ.get("RETRY_MAX_ATTEMPTS", "4")),
+    base_delay=float(os.environ.get("RETRY_BASE_DELAY", "0.5")),
+    max_delay=float(os.environ.get("RETRY_MAX_DELAY", "8.0")),
+)
 
 # ── AWS クライアント（モジュールレベルでウォームスタート時に再利用） ──
 _s3_client = boto3.client("s3")
@@ -76,9 +89,13 @@ def get_file_from_s3(bucket: str, key: str) -> bytes:
     """
     S3 からファイルをダウンロードしてバイト列で返す。
 
+    SlowDown（S3 のスロットリング）に備えてリトライ付きで呼び出す。
+
     TODO: 大きなファイルはストリーミングで処理する
     """
-    response = _s3_client.get_object(Bucket=bucket, Key=key)
+    response = retry_call(
+        _s3_client.get_object, Bucket=bucket, Key=key, config=RETRY_CONFIG
+    )
     return response["Body"].read()
 
 
@@ -135,9 +152,11 @@ def analyze_with_bedrock(file_bytes: bytes, key: str) -> dict[str, Any]:
     """
     Bedrock（Claude マルチモーダル）でファイルを解析して結果を返す。
 
+    ThrottlingException / ModelNotReadyException は retry.py の
+    指数バックオフ + フルジッターで自動リトライする。
+
     TODO: PDF の場合は pymupdf などでページ画像に変換してから送る
     TODO: 応答の JSON バリデーションを追加する
-    TODO: リトライ処理を追加する（ThrottlingException 対策）
     """
     ext = "." + key.rsplit(".", 1)[-1].lower()
 
@@ -177,11 +196,13 @@ def analyze_with_bedrock(file_bytes: bytes, key: str) -> dict[str, Any]:
         }
     )
 
-    response = _bedrock_client.invoke_model(
+    response = retry_call(
+        _bedrock_client.invoke_model,
         modelId=BEDROCK_MODEL_ID,
         body=body,
         contentType="application/json",
         accept="application/json",
+        config=RETRY_CONFIG,
     )
 
     result = json.loads(response["body"].read())
@@ -231,7 +252,8 @@ def save_to_dynamodb(
         "result": result,
     }
 
-    table.put_item(Item=item)
+    # ProvisionedThroughputExceededException に備えてリトライ付きで書き込む
+    retry_call(table.put_item, Item=item, config=RETRY_CONFIG)
     logger.info(f"DynamoDB 保存完了: document_id={document_id}")
 
 
