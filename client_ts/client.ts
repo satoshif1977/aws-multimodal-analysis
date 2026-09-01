@@ -17,3 +17,19 @@ export {
   buildDocumentId,
   buildDynamoDbItem,
 } from "./helpers";
+
+export {
+  RETRYABLE_ERROR_CODES,
+  RETRYABLE_STATUS_CODES,
+  DEFAULT_RETRY_CONFIG,
+  validateRetryConfig,
+  resolveRetryConfig,
+  extractErrorCode,
+  extractStatusCode,
+  isRetryableError,
+  computeDelay,
+  delay,
+  retryAsync,
+  withRetry,
+} from "./retry";
+export type { RetryConfig, RetryOptions } from "./retry";
