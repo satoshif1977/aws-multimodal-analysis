@@ -9,8 +9,9 @@
 //   - コールドスタートが Python より高速（バイナリ実行・ランタイム起動なし）
 //
 // ビルド方法:
-//   GOOS=linux GOARCH=arm64 go build -o bootstrap main.go
-//   zip lambda_go.zip bootstrap
+//
+//	GOOS=linux GOARCH=arm64 go build -o bootstrap main.go
+//	zip lambda_go.zip bootstrap
 package main
 
 import (
@@ -19,7 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -56,7 +57,8 @@ var (
 func init() {
 	cfg, err := config.LoadDefaultConfig(context.Background())
 	if err != nil {
-		log.Fatalf("AWS 設定の読み込みに失敗: %v", err)
+		NewLoggerFromEnv(LoggerOptions{}).Error("AWS 設定の読み込みに失敗しました", "error", err.Error())
+		os.Exit(1)
 	}
 	s3Client = s3.NewFromConfig(cfg)
 	bedrockClient = bedrockruntime.NewFromConfig(cfg)
@@ -65,9 +67,9 @@ func init() {
 
 // ── Bedrock リクエスト / レスポンス型 ────────────────────
 type BedrockBody struct {
-	AnthropicVersion string            `json:"anthropic_version"`
-	MaxTokens        int               `json:"max_tokens"`
-	Messages         []BedrockMessage  `json:"messages"`
+	AnthropicVersion string           `json:"anthropic_version"`
+	MaxTokens        int              `json:"max_tokens"`
+	Messages         []BedrockMessage `json:"messages"`
 }
 
 type BedrockMessage struct {
@@ -254,67 +256,152 @@ func saveToDynamoDB(ctx context.Context, documentID, bucket, key string, result 
 	return err
 }
 
-// ── Lambda ハンドラー ──────────────────────────────────────
-func Handler(ctx context.Context, event events.S3Event) (map[string]interface{}, error) {
-	log.Printf("S3 イベント受信: %d 件", len(event.Records))
+// ── 検証 ───────────────────────────────────────────────────
+
+// validateRecord は S3 オブジェクトが処理対象かを判定する。
+//
+// 対象外の理由を文字列で返すのは、スキップ理由をそのまま
+// レスポンスとログの双方に載せるため。
+func validateRecord(key string, sizeBytes int64) (ok bool, reason string) {
+	if !isAllowedExt(key) {
+		return false, fmt.Sprintf("未対応の拡張子: %s", getExt(key))
+	}
+	sizeMB := float64(sizeBytes) / (1024 * 1024)
+	if sizeMB > maxFileSizeMB {
+		return false, fmt.Sprintf("ファイルサイズ超過: %.1fMB（上限 %dMB）", sizeMB, maxFileSizeMB)
+	}
+	return true, ""
+}
+
+// ── メトリクス ─────────────────────────────────────────────
+
+// defaultMetricsNamespace は METRICS_NAMESPACE 未設定時に使う名前空間。
+const defaultMetricsNamespace = "MultimodalAnalysis/Ingest"
+
+// newMetricsFromEnv は環境変数から Metrics を生成する。
+// 生成に失敗しても処理は続けたいので、エラー時は nil を返す。
+func newMetricsFromEnv(logger *slog.Logger) *Metrics {
+	ns := strings.TrimSpace(os.Getenv("METRICS_NAMESPACE"))
+	if ns == "" {
+		ns = defaultMetricsNamespace
+	}
+	m, err := NewMetrics(MetricsOptions{Namespace: ns})
+	if err != nil {
+		logger.Warn("メトリクスの初期化に失敗しました。計装なしで継続します", "error", err.Error())
+		return nil
+	}
+	return m
+}
+
+// recordCount はカウントメトリクスを 1 件記録する。
+//
+// 記録に失敗しても処理は止めない。計装のために本体の可用性を
+// 下げては本末転倒なため。
+func recordCount(logger *slog.Logger, metrics *Metrics, name string, value float64) {
+	if metrics == nil {
+		return
+	}
+	if err := metrics.Count(name, value); err != nil {
+		logger.Warn("メトリクスの記録に失敗しました", "metric", name, "error", err.Error())
+	}
+}
+
+// ── 処理本体 ───────────────────────────────────────────────
+
+// runHandler は S3 イベントを 1 件ずつ処理し、結果の一覧を返す。
+//
+// Handler からロガーとメトリクスの生成を切り離してあるため、
+// テストではメモリ上の Writer を渡して出力まで検証できる。
+func runHandler(
+	ctx context.Context,
+	logger *slog.Logger,
+	metrics *Metrics,
+	event events.S3Event,
+) map[string]interface{} {
+	logger.Info("S3 イベントを受信しました", "records", len(event.Records))
+	recordCount(logger, metrics, "DocumentsReceived", float64(len(event.Records)))
+
 	processed := make([]ProcessedRecord, 0, len(event.Records))
+	var succeeded, skipped, failed int
 
 	for _, record := range event.Records {
 		bucket := record.S3.Bucket.Name
 		key := record.S3.Object.Key
-		sizeBytes := record.S3.Object.Size
 		documentID := fmt.Sprintf("%s/%s", bucket, key)
+		recLogger := logger.With("bucket", bucket, "key", key)
 
-		log.Printf("処理開始: %s", documentID)
+		recLogger.Info("処理を開始しました")
 
-		// ── ファイル検証 ───────────────────────────────────
-		if !isAllowedExt(key) {
-			ext := getExt(key)
-			msg := fmt.Sprintf("未対応の拡張子: %s", ext)
-			log.Printf("ファイル検証NG: %s", msg)
-			processed = append(processed, ProcessedRecord{Key: key, Status: "skipped", Reason: msg})
-			continue
-		}
-		if float64(sizeBytes)/(1024*1024) > maxFileSizeMB {
-			msg := fmt.Sprintf("ファイルサイズ超過: %.1fMB（上限 %dMB）", float64(sizeBytes)/(1024*1024), maxFileSizeMB)
-			log.Printf("ファイル検証NG: %s", msg)
-			processed = append(processed, ProcessedRecord{Key: key, Status: "skipped", Reason: msg})
+		if ok, reason := validateRecord(key, record.S3.Object.Size); !ok {
+			recLogger.Warn("対象外のファイルのためスキップしました", "reason", reason)
+			processed = append(processed, ProcessedRecord{Key: key, Status: "skipped", Reason: reason})
+			skipped++
 			continue
 		}
 
-		// ── S3 からファイル取得 ────────────────────────────
 		fileBytes, err := getFileFromS3(ctx, bucket, key)
 		if err != nil {
-			log.Printf("S3 取得エラー: %v", err)
+			recLogger.Error("S3 からの取得に失敗しました", "error", err.Error())
 			processed = append(processed, ProcessedRecord{Key: key, Status: "error", Reason: err.Error()})
+			failed++
 			continue
 		}
-		log.Printf("S3 取得完了: %d bytes", len(fileBytes))
+		recLogger.Debug("S3 からの取得が完了しました", "bytes", len(fileBytes))
 
-		// ── Bedrock で解析 ────────────────────────────────
 		result, err := analyzeWithBedrock(ctx, fileBytes, key)
 		if err != nil {
-			log.Printf("Bedrock 解析エラー: %v", err)
+			recLogger.Error("Bedrock での解析に失敗しました", "error", err.Error())
 			processed = append(processed, ProcessedRecord{Key: key, Status: "error", Reason: err.Error()})
+			failed++
 			continue
 		}
-		log.Printf("Bedrock 解析完了: フィールド数=%d", len(result))
+		recLogger.Info("Bedrock での解析が完了しました", "fields", len(result))
+		recordCount(logger, metrics, "ExtractedFields", float64(len(result)))
 
-		// ── DynamoDB に保存 ───────────────────────────────
 		if err := saveToDynamoDB(ctx, documentID, bucket, key, result); err != nil {
-			log.Printf("DynamoDB 保存エラー: %v", err)
+			recLogger.Error("DynamoDB への保存に失敗しました", "error", err.Error())
 			processed = append(processed, ProcessedRecord{Key: key, Status: "error", Reason: err.Error()})
+			failed++
 			continue
 		}
 
-		log.Printf("処理完了: %s", documentID)
+		recLogger.Info("処理が完了しました")
 		processed = append(processed, ProcessedRecord{Key: key, Status: "success"})
+		succeeded++
+	}
+
+	recordCount(logger, metrics, "DocumentsSucceeded", float64(succeeded))
+	recordCount(logger, metrics, "DocumentsSkipped", float64(skipped))
+	recordCount(logger, metrics, "DocumentsFailed", float64(failed))
+
+	if failed > 0 {
+		logger.Warn("処理に失敗したレコードがあります",
+			"succeeded", succeeded, "skipped", skipped, "failed", failed)
+	} else {
+		logger.Info("すべてのレコードを処理しました",
+			"succeeded", succeeded, "skipped", skipped, "failed", failed)
 	}
 
 	return map[string]interface{}{
 		"statusCode": 200,
 		"body":       processed,
-	}, nil
+	}
+}
+
+// ── Lambda ハンドラー ──────────────────────────────────────
+
+func Handler(ctx context.Context, event events.S3Event) (map[string]interface{}, error) {
+	logger := NewLoggerFromEnv(LoggerOptions{})
+	metrics := newMetricsFromEnv(logger)
+
+	resp := runHandler(ctx, logger, metrics, event)
+
+	if metrics != nil {
+		if err := metrics.Flush(); err != nil {
+			logger.Warn("メトリクスの出力に失敗しました", "error", err.Error())
+		}
+	}
+	return resp, nil
 }
 
 func main() {
