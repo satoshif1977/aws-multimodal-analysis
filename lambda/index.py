@@ -13,14 +13,14 @@ TODO:
   - 解析プロンプトを文書種別（請求書/見積書/報告書）ごとに切り替える
   - 解析失敗時の S3 エラーフォルダへの移動処理
   - DLQ（Dead Letter Queue）で失敗イベントを保存する
-  - 抽出精度の評価指標（抽出成功率）を CloudWatch カスタムメトリクスで記録する
+  - 解析プロンプトの精度評価（抽出フィールドの充足率）を継続的に測る
 """
 
 import base64
 import json
-import logging
 import os
 import sys
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -28,11 +28,23 @@ import boto3
 from botocore.exceptions import ClientError
 
 sys.path.insert(0, os.path.dirname(__file__))
+from logger import (  # noqa: E402
+    StructuredLogger,
+    create_logger_from_env,
+    retry_logger,
+)
+from metrics import (  # noqa: E402
+    MetricsCollector,
+    create_metrics_from_env,
+    retry_metrics,
+)
 from retry import RetryConfig, retry_call  # noqa: E402
 
-# ── ロガー設定 ─────────────────────────────────────────────
-logger = logging.getLogger()
-logger.setLevel(os.environ.get("LOG_LEVEL", "INFO"))
+# ── ロガー ─────────────────────────────────────────────────
+# 1 行 JSON で出し、機密キーは自動でマスキングする（logger.py を参照）。
+# S3 のキーやファイル名には顧客名が入りうるので、message に埋めず
+# 必ずフィールドで渡すこと。
+logger = create_logger_from_env()
 
 # ── 定数 ──────────────────────────────────────────────────
 BEDROCK_MODEL_ID = os.environ.get(
@@ -55,6 +67,29 @@ RETRY_CONFIG = RetryConfig(
     base_delay=float(os.environ.get("RETRY_BASE_DELAY", "0.5")),
     max_delay=float(os.environ.get("RETRY_MAX_DELAY", "8.0")),
 )
+
+
+def retry_hooks(
+    operation: str,
+    log: StructuredLogger,
+    metrics: MetricsCollector | None,
+):
+    """retry_call(on_retry=...) に渡すフックを1つにまとめる。
+
+    logger.py の retry_logger() と metrics.py の retry_metrics() は
+    どちらも (試行回数, 待機秒数, 例外) を受ける同じ形なので、まとめて呼べる。
+    metrics が None のときはログだけに絞る。
+    """
+    hooks = [retry_logger(log, operation)]
+    if metrics is not None:
+        hooks.append(retry_metrics(metrics, operation))
+
+    def on_retry(attempt: int, delay_seconds: float, exc: BaseException) -> None:
+        for hook in hooks:
+            hook(attempt, delay_seconds, exc)
+
+    return on_retry
+
 
 # ── AWS クライアント（モジュールレベルでウォームスタート時に再利用） ──
 _s3_client = boto3.client("s3")
@@ -85,16 +120,28 @@ def validate_file(key: str, size_bytes: int) -> tuple[bool, str]:
 
 
 # ── S3 からファイル取得 ────────────────────────────────────
-def get_file_from_s3(bucket: str, key: str) -> bytes:
+def get_file_from_s3(
+    bucket: str,
+    key: str,
+    *,
+    log: StructuredLogger | None = None,
+    metrics: MetricsCollector | None = None,
+) -> bytes:
     """
     S3 からファイルをダウンロードしてバイト列で返す。
 
     SlowDown（S3 のスロットリング）に備えてリトライ付きで呼び出す。
+    リトライが起きたらログとメトリクスの両方に残す。
 
     TODO: 大きなファイルはストリーミングで処理する
     """
+    log = log or logger
     response = retry_call(
-        _s3_client.get_object, Bucket=bucket, Key=key, config=RETRY_CONFIG
+        _s3_client.get_object,
+        Bucket=bucket,
+        Key=key,
+        config=RETRY_CONFIG,
+        on_retry=retry_hooks("S3.GetObject", log, metrics),
     )
     return response["Body"].read()
 
@@ -148,7 +195,13 @@ def build_prompt(key: str) -> str:
 
 
 # ── Bedrock でファイル解析 ─────────────────────────────────
-def analyze_with_bedrock(file_bytes: bytes, key: str) -> dict[str, Any]:
+def analyze_with_bedrock(
+    file_bytes: bytes,
+    key: str,
+    *,
+    log: StructuredLogger | None = None,
+    metrics: MetricsCollector | None = None,
+) -> dict[str, Any]:
     """
     Bedrock（Claude マルチモーダル）でファイルを解析して結果を返す。
 
@@ -196,6 +249,7 @@ def analyze_with_bedrock(file_bytes: bytes, key: str) -> dict[str, Any]:
         }
     )
 
+    log = log or logger
     response = retry_call(
         _bedrock_client.invoke_model,
         modelId=BEDROCK_MODEL_ID,
@@ -203,6 +257,7 @@ def analyze_with_bedrock(file_bytes: bytes, key: str) -> dict[str, Any]:
         contentType="application/json",
         accept="application/json",
         config=RETRY_CONFIG,
+        on_retry=retry_hooks("Bedrock.InvokeModel", log, metrics),
     )
 
     result = json.loads(response["body"].read())
@@ -214,7 +269,16 @@ def analyze_with_bedrock(file_bytes: bytes, key: str) -> dict[str, Any]:
         end = raw_text.rindex("}") + 1
         extracted = json.loads(raw_text[start:end])
     except (ValueError, json.JSONDecodeError):
-        # JSON パース失敗時はテキストとして保存
+        # JSON パース失敗時はテキストとして保存する。
+        # 無言で握りつぶすと「抽出できたのか、テキストのまま保存されたのか」が
+        # 後から判別できないので、必ずログとメトリクスに残す。
+        log.warn(
+            "解析結果を JSON として読めませんでした。テキストのまま保存します",
+            s3_key=key,
+            raw_length=len(raw_text),
+        )
+        if metrics is not None:
+            metrics.add_metric("AnalyzeJsonParseFailures", 1, unit="Count")
         extracted = {"raw_text": raw_text}
 
     return extracted
@@ -222,7 +286,13 @@ def analyze_with_bedrock(file_bytes: bytes, key: str) -> dict[str, Any]:
 
 # ── DynamoDB に保存（サンプル実装） ───────────────────────
 def save_to_dynamodb(
-    document_id: str, bucket: str, key: str, result: dict[str, Any]
+    document_id: str,
+    bucket: str,
+    key: str,
+    result: dict[str, Any],
+    *,
+    log: StructuredLogger | None = None,
+    metrics: MetricsCollector | None = None,
 ) -> None:
     """
     解析結果を DynamoDB に保存する。
@@ -253,8 +323,19 @@ def save_to_dynamodb(
     }
 
     # ProvisionedThroughputExceededException に備えてリトライ付きで書き込む
-    retry_call(table.put_item, Item=item, config=RETRY_CONFIG)
-    logger.info(f"DynamoDB 保存完了: document_id={document_id}")
+    log = log or logger
+    retry_call(
+        table.put_item,
+        Item=item,
+        config=RETRY_CONFIG,
+        on_retry=retry_hooks("DynamoDB.PutItem", log, metrics),
+    )
+    log.info(
+        "DynamoDB へ保存しました",
+        document_id=document_id,
+        table=DYNAMODB_TABLE,
+        expires_at=expires_at,
+    )
 
 
 # ── Lambda ハンドラー ──────────────────────────────────────
@@ -262,50 +343,88 @@ def handler(event: dict[str, Any], context: Any) -> dict[str, Any]:
     """
     S3 イベントを受け取り、ファイルを解析して DynamoDB に保存する。
 
+    ログは 1 行 JSON（logger.py）、メトリクスは EMF（metrics.py）で出力する。
+    S3 キーやファイル名は message に埋めず、フィールドで渡してマスキングを効かせる。
+
     TODO: 複数ファイルの並列処理（S3 イベントは複数レコードを含む場合がある）
     TODO: 解析失敗時に S3 の error/ プレフィックスにファイルを移動する
-    TODO: CloudWatch カスタムメトリクスで抽出成功率を記録する
     """
-    logger.info(f"イベント受信: {json.dumps(event)[:200]}")
+    request_id = getattr(context, "aws_request_id", None)
+    log = logger.child(request_id=request_id) if request_id else logger
+    metrics = create_metrics_from_env()
+    metrics.set_dimensions(
+        FunctionName=os.environ.get("AWS_LAMBDA_FUNCTION_NAME", "local")
+    )
+
+    records = event.get("Records", [])
+    log.info("イベントを受信しました", record_count=len(records))
+    metrics.add_metric("InvocationRecords", len(records), unit="Count")
+
     processed = []
 
-    for record in event.get("Records", []):
+    for record in records:
         bucket = record["s3"]["bucket"]["name"]
         key = record["s3"]["object"]["key"]
         size = record["s3"]["object"].get("size", 0)
         document_id = f"{bucket}/{key}"
 
-        logger.info(f"処理開始: {document_id}")
+        # s3_key はフィールドで渡す（message に埋めるとマスキングが効かない）
+        rec_log = log.child(s3_bucket=bucket, s3_key=key)
+        rec_log.info("処理を開始します", size_bytes=size)
+        started = time.monotonic()
 
         # ── ファイル検証 ───────────────────────────────────
         ok, error_msg = validate_file(key, size)
         if not ok:
-            logger.warning(f"ファイル検証NG: {error_msg}")
+            rec_log.warn("ファイル検証に失敗しました", reason=error_msg)
+            metrics.add_metric("FilesSkipped", 1, unit="Count")
             processed.append({"key": key, "status": "skipped", "reason": error_msg})
             continue
 
         try:
             # ── S3 からファイル取得 ────────────────────────
-            file_bytes = get_file_from_s3(bucket, key)
-            logger.info(f"S3 取得完了: {len(file_bytes)} bytes")
+            file_bytes = get_file_from_s3(bucket, key, log=rec_log, metrics=metrics)
+            rec_log.info("S3 から取得しました", bytes=len(file_bytes))
+            metrics.add_metric("FileSizeBytes", len(file_bytes), unit="Bytes")
 
             # ── Bedrock で解析 ────────────────────────────
-            result = analyze_with_bedrock(file_bytes, key)
-            logger.info(f"Bedrock 解析完了: {list(result.keys())}")
+            result = analyze_with_bedrock(file_bytes, key, log=rec_log, metrics=metrics)
+            rec_log.info("Bedrock で解析しました", fields=sorted(result.keys()))
 
             # ── DynamoDB に保存 ───────────────────────────
-            save_to_dynamodb(document_id, bucket, key, result)
+            save_to_dynamodb(
+                document_id, bucket, key, result, log=rec_log, metrics=metrics
+            )
 
+            metrics.add_metric("FilesProcessed", 1, unit="Count")
             processed.append({"key": key, "status": "success"})
 
         except ClientError as e:
             error_code = e.response["Error"]["Code"]
-            logger.error(f"AWS エラー: {error_code} / {key} / {e}")
+            rec_log.error(
+                "AWS API がエラーを返しました", error_code=error_code, error=e
+            )
+            metrics.add_metric("FilesFailed", 1, unit="Count")
+            metrics.set_property("last_error_code", error_code)
             processed.append({"key": key, "status": "error", "reason": error_code})
 
         except Exception as e:
-            logger.error(f"予期しないエラー: {key} / {e}", exc_info=True)
+            rec_log.error("予期しないエラーが発生しました", error=e)
+            metrics.add_metric("FilesFailed", 1, unit="Count")
             processed.append({"key": key, "status": "error", "reason": str(e)})
+
+        finally:
+            metrics.add_metric(
+                "ProcessingDuration",
+                (time.monotonic() - started) * 1000,
+                unit="Milliseconds",
+            )
+
+    # メトリクスは副次処理。ここで失敗しても本処理の結果は返す
+    try:
+        metrics.flush()
+    except Exception as e:  # pragma: no cover - 想定外のみ
+        log.warn("メトリクスの出力に失敗しました", error=e)
 
     return {
         "statusCode": 200,
